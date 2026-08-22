@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { 
   Sparkles, 
   LayoutDashboard, 
@@ -15,10 +15,12 @@ import {
   ChevronDown, 
   Plus, 
   ShieldAlert,
-  Bot
+  Bot,
+  LogOut
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/lib/auth-context';
 
 interface SidebarProps {
   workspaceId?: string;
@@ -27,21 +29,28 @@ interface SidebarProps {
 
 export function Sidebar({ workspaceId = 'ws-1', onOpenAiDrawer }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, activeWorkspace, logout } = useAuth();
   const [workspaceOpen, setWorkspaceOpen] = React.useState(true);
 
   const mainNav = [
     { name: 'Dashboard', href: `/dashboard`, icon: LayoutDashboard },
-    { name: 'Projects', href: `/workspaces/${workspaceId}/projects`, icon: FolderKanban, badge: '8' },
-    { name: 'Documents', href: `/workspaces/${workspaceId}/documents`, icon: FileText, badge: '14' },
-    { name: 'Tasks', href: `/workspaces/${workspaceId}/tasks`, icon: CheckSquare, badge: '23' },
-    { name: 'Discussions', href: `/workspaces/${workspaceId}/discussions`, icon: MessageSquare, badge: 'Live' },
+    { name: 'Projects', href: `/workspaces/${activeWorkspace?.id || workspaceId}/projects`, icon: FolderKanban, badge: '8' },
+    { name: 'Documents', href: `/workspaces/${activeWorkspace?.id || workspaceId}/documents`, icon: FileText, badge: '14' },
+    { name: 'Tasks', href: `/workspaces/${activeWorkspace?.id || workspaceId}/tasks`, icon: CheckSquare, badge: '23' },
+    { name: 'Discussions', href: `/workspaces/${activeWorkspace?.id || workspaceId}/discussions`, icon: MessageSquare, badge: 'Live' },
   ];
 
   const adminNav = [
-    { name: 'Members & Roles', href: `/workspaces/${workspaceId}/members`, icon: Users },
-    { name: 'Workspace Settings', href: `/workspaces/${workspaceId}/settings`, icon: Settings },
+    { name: 'Members & Roles', href: `/workspaces/${activeWorkspace?.id || workspaceId}/members`, icon: Users },
+    { name: 'Workspace Settings', href: `/workspaces/${activeWorkspace?.id || workspaceId}/settings`, icon: Settings },
     { name: 'System Admin', href: `/admin`, icon: ShieldAlert },
   ];
+
+  const handleLogout = async () => {
+    await logout();
+    router.push('/login');
+  };
 
   return (
     <aside className="w-64 bg-dark-900/90 border-r border-slate-800/80 flex flex-col justify-between shrink-0 h-screen sticky top-0 backdrop-blur-xl z-20">
@@ -69,11 +78,13 @@ export function Sidebar({ workspaceId = 'ws-1', onOpenAiDrawer }: SidebarProps) 
             className="w-full flex items-center justify-between p-2.5 rounded-lg bg-slate-800/40 hover:bg-slate-800/70 border border-slate-700/50 cursor-pointer transition-colors"
           >
             <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-xs font-bold text-white shadow">
-                FA
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-xs font-bold text-white shadow uppercase">
+                {activeWorkspace?.name?.substring(0, 2) || 'FA'}
               </div>
               <div className="flex flex-col text-left">
-                <span className="text-xs font-semibold text-white">FlowAI Team</span>
+                <span className="text-xs font-semibold text-white truncate max-w-[110px]">
+                  {activeWorkspace?.name || 'FlowAI Team'}
+                </span>
                 <span className="text-[10px] text-slate-400">12 Members • Owner</span>
               </div>
             </div>
@@ -154,19 +165,25 @@ export function Sidebar({ workspaceId = 'ws-1', onOpenAiDrawer }: SidebarProps) 
         </nav>
       </div>
 
-      {/* User Footer Profile */}
-      <div className="p-3 border-t border-slate-800/60 bg-dark-950/40">
-        <div className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-800/40 cursor-pointer transition-colors">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center font-bold text-xs text-white ring-2 ring-indigo-500/40">
-              E
-            </div>
-            <div className="flex flex-col">
-              <span className="text-xs font-medium text-white">Emmanuel</span>
-              <span className="text-[10px] text-slate-400">emmanuel@flowai.io</span>
-            </div>
+      {/* User Footer Profile & Logout */}
+      <div className="p-3 border-t border-slate-800/60 bg-dark-950/40 flex items-center justify-between">
+        <div className="flex items-center gap-2.5 overflow-hidden">
+          <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center font-bold text-xs text-white ring-2 ring-indigo-500/40 shrink-0 uppercase">
+            {user?.name?.charAt(0) || 'E'}
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-xs font-medium text-white truncate">{user?.name || 'Emmanuel'}</span>
+            <span className="text-[10px] text-slate-400 truncate">{user?.email || 'emmanuel@flowai.io'}</span>
           </div>
         </div>
+
+        <button
+          onClick={handleLogout}
+          title="Sign Out"
+          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+        >
+          <LogOut className="w-4 h-4" />
+        </button>
       </div>
     </aside>
   );

@@ -2,11 +2,35 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Sparkles, ArrowRight, Lock, Mail } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Sparkles, ArrowRight, Lock, Mail, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { useAuth } from '@/lib/auth-context';
 
 export default function LoginPage() {
+  const router = useRouter();
+  const { login } = useAuth();
+  const [email, setEmail] = React.useState('emmanuel@flowai.io');
+  const [password, setPassword] = React.useState('StrongP@ssw0rd123');
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      await login({ email, password });
+      router.push('/dashboard');
+    } catch (err: any) {
+      setError(err.message || 'Login failed. Please check credentials.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-dark-950 flex items-center justify-center p-6 relative overflow-hidden">
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-brand-600/20 blur-[140px] rounded-full pointer-events-none" />
@@ -20,15 +44,24 @@ export default function LoginPage() {
           <p className="text-xs text-slate-400">Sign in to your FlowAI Workspace account</p>
         </div>
 
-        <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+        {error && (
+          <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-300">Email Address</label>
             <div className="relative">
               <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
               <input 
                 type="email" 
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@company.com" 
-                defaultValue="emmanuel@flowai.io"
                 className="w-full bg-slate-900/90 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500"
               />
             </div>
@@ -43,25 +76,30 @@ export default function LoginPage() {
               <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
               <input 
                 type="password" 
-                defaultValue="••••••••••••"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="w-full bg-slate-900/90 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500"
               />
             </div>
           </div>
 
-          <Link href="/dashboard" className="block pt-2">
-            <Button variant="gradient" className="w-full py-3">
-              <span>Sign In to Workspace</span>
-              <ArrowRight className="w-4 h-4" />
-            </Button>
-          </Link>
+          <Button type="submit" variant="gradient" disabled={loading} className="w-full py-3">
+            <span>{loading ? 'Authenticating...' : 'Sign In to Workspace'}</span>
+            <ArrowRight className="w-4 h-4" />
+          </Button>
 
           <div className="relative my-6 text-center text-xs text-slate-500">
             <span className="bg-dark-900 px-2 relative z-10">or continue with</span>
             <div className="absolute inset-0 top-1/2 border-t border-slate-800" />
           </div>
 
-          <Button variant="outline" className="w-full text-xs">
+          <Button 
+            type="button" 
+            variant="outline" 
+            className="w-full text-xs"
+            onClick={() => window.location.href = 'http://localhost:4000/api/auth/google'}
+          >
             <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
               <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
               <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
