@@ -1,0 +1,17 @@
+{
+  "name": "flowai-workspace",
+  "version": "1.0.0",
+  "description": "FlowAI Workspace - Production-ready AI-native collaborative workspace platform",
+  "private": true,
+  "scripts": {
+    "dev:backend": "npm --prefix backend run start:dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build:backend": "npm --prefix backend run build",
+    "build:frontend": "npm --prefix frontend run build",
+    "check-types:backend": "npm --prefix backend run check-types",
+    "check-types:frontend": "npm --prefix frontend run check-types",
+    "prisma:generate": "npm --prefix backend run prisma:generate",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down"
+  }
+}
