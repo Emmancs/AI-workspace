@@ -153,3 +153,76 @@ export async function archiveDocument(documentId: string) {
     method: 'PATCH',
   });
 }
+
+// Comments API functions
+export function useComments(documentId: string) {
+  const [comments, setComments] = React.useState<Comment[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!documentId) return;
+
+    const fetchComments = async () => {
+      try {
+        setLoading(true);
+        const data = await apiFetch<Comment[]>(`/comments/document/${documentId}`);
+        setComments(data || []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch comments');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchComments();
+  }, [documentId]);
+
+  return { comments, loading, error };
+}
+
+export async function addComment(documentId: string, content: string) {
+  return apiFetch<Comment>('/comments', {
+    method: 'POST',
+    body: JSON.stringify({
+      documentId,
+      content,
+    }),
+  });
+}
+
+export async function updateComment(
+  commentId: string,
+  content?: string,
+  isResolved?: boolean
+) {
+  return apiFetch<Comment>(`/comments/${commentId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      content,
+      isResolved,
+    }),
+  });
+}
+
+export async function deleteComment(commentId: string) {
+  return apiFetch(`/comments/${commentId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function addCommentReply(commentId: string, content: string) {
+  return apiFetch<CommentReply>(`/comments/${commentId}/replies`, {
+    method: 'POST',
+    body: JSON.stringify({
+      commentId,
+      content,
+    }),
+  });
+}
+
+export async function deleteCommentReply(replyId: string) {
+  return apiFetch(`/comments/reply/${replyId}`, {
+    method: 'DELETE',
+  });
+}
