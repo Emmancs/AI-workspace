@@ -2,10 +2,11 @@
 
 import * as React from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Check, AlertCircle, Clock, Users, Lock } from 'lucide-react';
+import { ArrowLeft, Check, AlertCircle, Clock, Users, Lock, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
-import { useDocument, updateDocument } from '@/lib/documents';
+import { CommentsThread, CommentData } from '@/components/ui/comments-thread';
+import { useDocument, updateDocument, useComments, addComment, updateComment, deleteComment, addCommentReply, deleteCommentReply } from '@/lib/documents';
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -15,10 +16,15 @@ export default function DocumentEditorPage() {
   const documentId = params.id as string;
   
   const { document, loading, error } = useDocument(documentId);
+  const { comments: apiComments, loading: commentsLoading } = useComments(documentId);
+  
   const [title, setTitle] = React.useState('');
   const [content, setContent] = React.useState<any>(null);
   const [saveStatus, setSaveStatus] = React.useState<SaveStatus>('idle');
   const [lastSaved, setLastSaved] = React.useState<Date | null>(null);
+  const [showComments, setShowComments] = React.useState(true);
+  const [comments, setComments] = React.useState<CommentData[]>([]);
+  
   const saveTimeoutRef = React.useRef<NodeJS.Timeout>();
 
   // Initialize from loaded document
@@ -28,6 +34,28 @@ export default function DocumentEditorPage() {
       setContent(document.content);
     }
   }, [document]);
+
+  // Transform API comments to component format
+  React.useEffect(() => {
+    if (apiComments) {
+      const transformedComments = apiComments.map(comment => ({
+        id: comment.id,
+        author: comment.user.name,
+        authorAvatar: comment.user.avatarUrl,
+        content: comment.content,
+        timestamp: new Date(comment.createdAt),
+        isResolved: comment.isResolved,
+        replies: comment.replies.map(reply => ({
+          id: reply.id,
+          author: reply.user.name,
+          authorAvatar: reply.user.avatarUrl,
+          content: reply.content,
+          timestamp: new Date(reply.createdAt),
+        })),
+      }));
+      setComments(transformedComments);
+    }
+  }, [apiComments]);
 
   // Autosave with debounce
   const handleContentChange = (newContent: any) => {
@@ -73,6 +101,89 @@ export default function DocumentEditorPage() {
         setSaveStatus('error');
       }
     }, 1000);
+  };
+
+  const handleAddComment = async (content: string) => {
+    try {
+      await addComment(documentId, content);
+      // Reload comments from API
+      const reloadedComments = await fetch(`/api/comments/document/${documentId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+      }).then(res => res.json());
+      
+      const transformedComments = reloadedComments.map((comment: any) => ({
+        id: comment.id,
+        author: comment.user.name,
+        authorAvatar: comment.user.avatarUrl,
+        content: comment.content,
+        timestamp: new Date(comment.createdAt),
+        isResolved: comment.isResolved,
+        replies: comment.replies.map((reply: any) => ({
+          id: reply.id,
+          author: reply.user.name,
+          authorAvatar: reply.user.avatarUrl,
+          content: reply.content,
+          timestamp: new Date(reply.createdAt),
+        })),
+      }));
+      setComments(transformedComments);
+    } catch (err) {
+      console.error('Failed to add comment:', err);
+    }
+  };
+
+  const handleAddReply = async (commentId: string, content: string) => {
+    try {
+      await addCommentReply(commentId, content);
+      // Reload comments from API
+      const reloadedComments = await fetch(`/api/comments/document/${documentId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+      }).then(res => res.json());
+      
+      const transformedComments = reloadedComments.map((comment: any) => ({
+        id: comment.id,
+        author: comment.user.name,
+        authorAvatar: comment.user.avatarUrl,
+        content: comment.content,
+        timestamp: new Date(comment.createdAt),
+        isResolved: comment.isResolved,
+        replies: comment.replies.map((reply: any) => ({
+          id: reply.id,
+          author: reply.user.name,
+          authorAvatar: reply.user.avatarUrl,
+          content: reply.content,
+          timestamp: new Date(reply.createdAt),
+        })),
+      }));
+      setComments(transformedComments);
+    } catch (err) {
+      console.error('Failed to add reply:', err);
+    }
+  };
+
+  const handleResolveComment = async (commentId: string) => {
+    try {
+      await updateComment(commentId, undefined, true);
+      // Update local state
+      setComments(comments.map(c => 
+        c.id === commentId ? { ...c, isResolved: true } : c
+      ));
+    } catch (err) {
+      console.error('Failed to resolve comment:', err);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    try {
+      await deleteComment(commentId);
+      setComments(comments.filter(c => c.id !== commentId));
+    } catch (err) {
+      console.error('Failed to delete comment:', err);
+    }
   };
 
   if (loading) {
@@ -160,28 +271,69 @@ export default function DocumentEditorPage() {
               <Users className="w-4 h-4" />
               <span>Editing</span>
             </div>
+
+            {/* Toggle Comments */}
+            <Button
+              variant={showComments ? 'gradient' : 'outline'}
+              size="sm"
+              onClick={() => setShowComments(!showComments)}
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span className="hidden sm:inline">{comments.length}</span>
+            </Button>
           </div>
         </div>
       </div>
 
-      {/* Editor */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-6 py-8">
-          <RichTextEditor
-            content={content}
-            onChange={handleContentChange}
-            editable={true}
-          />
+      {/* Main Content + Comments */}
+      <div className="flex-1 overflow-hidden flex">
+        {/* Editor */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-4xl mx-auto px-6 py-8">
+            <RichTextEditor
+              content={content}
+              onChange={handleContentChange}
+              editable={true}
+            />
 
-          {/* Document Info */}
-          <div className="mt-8 p-4 rounded-lg bg-slate-900/50 border border-slate-800 text-xs text-slate-400">
-            <div className="space-y-2">
-              <div>Created by <span className="text-slate-300">{document.createdBy.name}</span></div>
-              <div>Created on <span className="text-slate-300">{new Date(document.createdAt).toLocaleString()}</span></div>
-              <div>Last modified <span className="text-slate-300">{new Date(document.updatedAt).toLocaleString()}</span></div>
+            {/* Document Info */}
+            <div className="mt-8 p-4 rounded-lg bg-slate-900/50 border border-slate-800 text-xs text-slate-400">
+              <div className="space-y-2">
+                <div>Created by <span className="text-slate-300">{document.createdBy.name}</span></div>
+                <div>Created on <span className="text-slate-300">{new Date(document.createdAt).toLocaleString()}</span></div>
+                <div>Last modified <span className="text-slate-300">{new Date(document.updatedAt).toLocaleString()}</span></div>
+              </div>
             </div>
           </div>
         </div>
+
+        {/* Comments Panel */}
+        {showComments && (
+          <div className="w-96 border-l border-slate-800 bg-dark-900 overflow-y-auto">
+            <div className="sticky top-0 bg-dark-950 border-b border-slate-800 px-4 py-3">
+              <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                <MessageCircle className="w-4 h-4" />
+                Comments ({comments.length})
+              </h3>
+            </div>
+
+            <div className="p-4">
+              {commentsLoading ? (
+                <div className="text-center py-8">
+                  <p className="text-xs text-slate-500">Loading comments...</p>
+                </div>
+              ) : (
+                <CommentsThread
+                  comments={comments}
+                  onAddComment={handleAddComment}
+                  onAddReply={handleAddReply}
+                  onResolve={handleResolveComment}
+                  onDeleteComment={handleDeleteComment}
+                />
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
