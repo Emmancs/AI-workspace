@@ -3,12 +3,13 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 import { FileText, Plus, Search, Filter, Clock, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useDocuments } from '@/lib/documents';
 
-export default function DocumentsListPage() {
+function DocumentsListContent() {
   const searchParams = useSearchParams();
   const workspaceId = searchParams.get('workspace') || '';
   const [search, setSearch] = React.useState('');
@@ -121,5 +122,22 @@ export default function DocumentsListPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function DocumentsListPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="w-12 h-12 rounded-lg bg-slate-800 mx-auto mb-4 animate-pulse" />
+            <p className="text-slate-400 text-sm">Loading documents...</p>
+          </div>
+        </div>
+      }
+    >
+      <DocumentsListContent />
+    </Suspense>
   );
 }

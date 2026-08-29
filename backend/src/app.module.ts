@@ -8,6 +8,7 @@ import { WorkspacesModule } from './workspaces/workspaces.module';
 import { ProjectsModule } from './projects/projects.module';
 import { DocumentsModule } from './documents/documents.module';
 import { TasksModule } from './tasks/tasks.module';
+import { CommentsModule } from './comments/comments.module';
 import { DiscussionsModule } from './discussions/discussions.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AiModule } from './ai/ai.module';
@@ -27,6 +28,7 @@ import { AdminModule } from './admin/admin.module';
     ProjectsModule,
     DocumentsModule,
     TasksModule,
+    CommentsModule,
     DiscussionsModule,
     NotificationsModule,
     AiModule,
