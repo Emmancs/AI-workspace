@@ -250,4 +250,55 @@ export class DocumentsService {
 
     return (share?.permissionLevel as any) || null;
   }
+
+  async validateDocumentAccess(documentId: string, workspaceId: string, userId: string) {
+    const document = await this.prisma.document.findUnique({
+      where: { id: documentId },
+      select: {
+        id: true,
+        workspaceId: true,
+        createdById: true,
+        content: true,
+      },
+    });
+
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+
+    if (document.workspaceId !== workspaceId) {
+      throw new Error('Document does not belong to the requested workspace');
+    }
+
+    const workspaceMember = await this.prisma.workspaceMember.findUnique({
+      where: {
+        workspaceId_userId: {
+          workspaceId: document.workspaceId,
+          userId,
+        },
+      },
+      select: { id: true },
+    });
+
+    if (!workspaceMember) {
+      throw new Error('User is not a member of this workspace');
+    }
+
+    const creatorAccess = document.createdById === userId;
+    const directShare = await this.prisma.documentShare.findUnique({
+      where: { documentId_userId: { documentId, userId } },
+      select: { permissionLevel: true },
+    });
+
+    const accessLevel = creatorAccess ? 'ADMIN' : (directShare?.permissionLevel as 'READ' | 'WRITE' | 'ADMIN' | undefined) ?? null;
+
+    if (!accessLevel) {
+      throw new Error('User does not have access to this document');
+    }
+
+    return {
+      document,
+      accessLevel,
+    };
+  }
 }

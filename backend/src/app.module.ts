@@ -15,6 +15,7 @@ import { AiModule } from './ai/ai.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AdminModule } from './admin/admin.module';
 import { EmbeddingsModule } from './embeddings/embeddings.module';
+import { CollaborationModule } from './collaboration/collaboration.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { EmbeddingsModule } from './embeddings/embeddings.module';
     AnalyticsModule,
     AdminModule,
     EmbeddingsModule,
+    CollaborationModule,
   ],
 })
 export class AppModule {}
