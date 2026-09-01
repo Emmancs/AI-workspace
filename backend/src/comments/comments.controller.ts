@@ -17,6 +17,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 export class CreateCommentDto {
   documentId: string;
   content: string;
+  mentions?: string[]; // Array of mentioned user IDs
 }
 
 export class UpdateCommentDto {
@@ -27,6 +28,7 @@ export class UpdateCommentDto {
 export class CreateCommentReplyDto {
   commentId: string;
   content: string;
+  mentions?: string[]; // Array of mentioned user IDs
 }
 
 @ApiTags('Comments')
@@ -64,6 +66,7 @@ export class CommentsController {
         documentId: dto.documentId,
         userId,
         content: dto.content,
+        mentions: dto.mentions || [],
       },
       include: {
         user: { select: { id: true, name: true, email: true, avatarUrl: true } },
@@ -132,6 +135,7 @@ export class CommentsController {
         commentId,
         userId,
         content: dto.content,
+        mentions: dto.mentions || [],
       },
       include: {
         user: { select: { id: true, name: true, email: true, avatarUrl: true } },

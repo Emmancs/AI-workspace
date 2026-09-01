@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { MessageCircle, X, Check } from 'lucide-react';
+import { MessageCircle, X, Check, AtSign } from 'lucide-react';
 import { Button } from './button';
 
 export interface CommentData {
@@ -12,6 +12,7 @@ export interface CommentData {
   timestamp: Date;
   isResolved?: boolean;
   replies?: ReplyData[];
+  mentions?: string[]; // Array of mentioned user IDs
 }
 
 export interface ReplyData {
@@ -20,18 +21,28 @@ export interface ReplyData {
   authorAvatar?: string;
   content: string;
   timestamp: Date;
+  mentions?: string[]; // Array of mentioned user IDs
+}
+
+export interface MentionableMember {
+  id: string;
+  name: string;
+  email: string;
+  avatarUrl?: string;
 }
 
 interface CommentsThreadProps {
   comments: CommentData[];
-  onAddComment?: (content: string) => void;
-  onAddReply?: (commentId: string, content: string) => void;
+  members?: MentionableMember[];
+  onAddComment?: (content: string, mentions?: string[]) => void;
+  onAddReply?: (commentId: string, content: string, mentions?: string[]) => void;
   onResolve?: (commentId: string) => void;
   onDeleteComment?: (commentId: string) => void;
 }
 
 export function CommentsThread({
   comments,
+  members = [],
   onAddComment,
   onAddReply,
   onResolve,
@@ -40,19 +51,114 @@ export function CommentsThread({
   const [expandedComment, setExpandedComment] = React.useState<string | null>(null);
   const [replyText, setReplyText] = React.useState<{ [key: string]: string }>({});
   const [newComment, setNewComment] = React.useState('');
+  const [mentionSuggestions, setMentionSuggestions] = React.useState<MentionableMember[]>([]);
+  const [showMentionsSuggestion, setShowMentionsSuggestion] = React.useState(false);
+  const [mentionField, setMentionField] = React.useState<'comment' | string | null>(null);
+  const [mentionQuery, setMentionQuery] = React.useState('');
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+
+  // Extract mentions from text (format: @username)
+  const extractMentions = (text: string): { text: string; mentions: string[] } => {
+    const mentionPattern = /@(\w+)/g;
+    const mentions: string[] = [];
+    let match;
+    while ((match = mentionPattern.exec(text)) !== null) {
+      const memberName = match[1];
+      const member = members.find((m) => m.name.toLowerCase() === memberName.toLowerCase());
+      if (member) {
+        mentions.push(member.id);
+      }
+    }
+    return { text, mentions };
+  };
+
+  // Handle @ mention detection
+  const handleCommentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setNewComment(value);
+
+    const lastAtIndex = value.lastIndexOf('@');
+    if (lastAtIndex !== -1) {
+      const afterAt = value.substring(lastAtIndex + 1);
+      const beforeAt = value.substring(0, lastAtIndex + 1);
+
+      // Check if @ is followed by word characters and no space
+      if (/^\w*$/.test(afterAt) && (lastAtIndex === 0 || /\s/.test(value[lastAtIndex - 1]))) {
+        setMentionField('comment');
+        setMentionQuery(afterAt);
+        setShowMentionsSuggestion(true);
+
+        // Filter members by query
+        if (afterAt.length > 0) {
+          const filtered = members.filter((m) =>
+            m.name.toLowerCase().startsWith(afterAt.toLowerCase())
+          );
+          setMentionSuggestions(filtered);
+        } else {
+          setMentionSuggestions(members);
+        }
+      } else {
+        setShowMentionsSuggestion(false);
+      }
+    } else {
+      setShowMentionsSuggestion(false);
+    }
+  };
+
+  const insertMention = (member: MentionableMember, field: 'comment' | string) => {
+    if (field === 'comment') {
+      const lastAtIndex = newComment.lastIndexOf('@');
+      const before = newComment.substring(0, lastAtIndex);
+      const after = newComment.substring(lastAtIndex + mentionQuery.length + 1);
+      const newText = `${before}@${member.name} ${after}`;
+      setNewComment(newText);
+    } else {
+      const lastAtIndex = replyText[field]?.lastIndexOf('@') || -1;
+      if (lastAtIndex !== -1) {
+        const before = replyText[field].substring(0, lastAtIndex);
+        const after = replyText[field].substring(lastAtIndex + mentionQuery.length + 1);
+        const newText = `${before}@${member.name} ${after}`;
+        setReplyText({ ...replyText, [field]: newText });
+      }
+    }
+    setShowMentionsSuggestion(false);
+    setMentionQuery('');
+  };
 
   return (
     <div className="space-y-4">
       {/* New Comment Form */}
       <div className="space-y-2">
         <label className="text-xs font-semibold text-slate-400">Add a comment</label>
-        <textarea
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          placeholder="Add a comment..."
-          className="w-full bg-slate-900/90 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 resize-none"
-          rows={3}
-        />
+        <div className="relative">
+          <textarea
+            ref={textareaRef}
+            value={newComment}
+            onChange={handleCommentChange}
+            placeholder="Add a comment... (type @ to mention someone)"
+            className="w-full bg-slate-900/90 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 resize-none"
+            rows={3}
+          />
+          
+          {/* Mentions Autocomplete */}
+          {showMentionsSuggestion && mentionField === 'comment' && mentionSuggestions.length > 0 && (
+            <div className="absolute bottom-full left-3 mb-1 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-10 w-48">
+              {mentionSuggestions.map((member) => (
+                <button
+                  key={member.id}
+                  onClick={() => insertMention(member, 'comment')}
+                  className="w-full text-left px-3 py-2 text-xs text-white hover:bg-slate-700 flex items-center gap-2 transition-colors"
+                >
+                  {member.avatarUrl && (
+                    <img src={member.avatarUrl} alt={member.name} className="w-5 h-5 rounded-full" />
+                  )}
+                  <span>{member.name}</span>
+                  <span className="text-slate-400 text-[11px]">{member.email}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <div className="flex justify-end gap-2">
           <Button
             variant="outline"
@@ -65,7 +171,8 @@ export function CommentsThread({
             variant="gradient"
             size="sm"
             onClick={() => {
-              onAddComment?.(newComment);
+              const { text, mentions } = extractMentions(newComment);
+              onAddComment?.(text, mentions);
               setNewComment('');
             }}
             disabled={!newComment.trim()}
@@ -166,15 +273,60 @@ export function CommentsThread({
                   </Button>
                 ) : (
                   <div className="space-y-2 ml-8">
-                    <textarea
-                      value={replyText[comment.id] || ''}
-                      onChange={(e) =>
-                        setReplyText({ ...replyText, [comment.id]: e.target.value })
-                      }
-                      placeholder="Write a reply..."
-                      className="w-full bg-slate-800/50 border border-slate-700 rounded-md px-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 resize-none"
-                      rows={2}
-                    />
+                    <div className="relative">
+                      <textarea
+                        value={replyText[comment.id] || ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setReplyText({ ...replyText, [comment.id]: value });
+
+                          // Handle mention detection for replies
+                          const lastAtIndex = value.lastIndexOf('@');
+                          if (lastAtIndex !== -1) {
+                            const afterAt = value.substring(lastAtIndex + 1);
+                            if (/^\w*$/.test(afterAt) && (lastAtIndex === 0 || /\s/.test(value[lastAtIndex - 1]))) {
+                              setMentionField(comment.id);
+                              setMentionQuery(afterAt);
+                              setShowMentionsSuggestion(true);
+
+                              if (afterAt.length > 0) {
+                                const filtered = members.filter((m) =>
+                                  m.name.toLowerCase().startsWith(afterAt.toLowerCase())
+                                );
+                                setMentionSuggestions(filtered);
+                              } else {
+                                setMentionSuggestions(members);
+                              }
+                            } else {
+                              setShowMentionsSuggestion(false);
+                            }
+                          } else {
+                            setShowMentionsSuggestion(false);
+                          }
+                        }}
+                        placeholder="Write a reply... (type @ to mention someone)"
+                        className="w-full bg-slate-800/50 border border-slate-700 rounded-md px-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 resize-none"
+                        rows={2}
+                      />
+                      
+                      {/* Mentions Autocomplete for Replies */}
+                      {showMentionsSuggestion && mentionField === comment.id && mentionSuggestions.length > 0 && (
+                        <div className="absolute bottom-full left-2 mb-1 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-10 w-48">
+                          {mentionSuggestions.map((member) => (
+                            <button
+                              key={member.id}
+                              onClick={() => insertMention(member, comment.id)}
+                              className="w-full text-left px-3 py-2 text-xs text-white hover:bg-slate-700 flex items-center gap-2 transition-colors"
+                            >
+                              {member.avatarUrl && (
+                                <img src={member.avatarUrl} alt={member.name} className="w-5 h-5 rounded-full" />
+                              )}
+                              <span>{member.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <div className="flex gap-2">
                       <Button
                         variant="outline"
@@ -191,7 +343,8 @@ export function CommentsThread({
                         size="sm"
                         onClick={() => {
                           const text = replyText[comment.id];
-                          onAddReply?.(comment.id, text);
+                          const { text: cleanText, mentions } = extractMentions(text);
+                          onAddReply?.(comment.id, cleanText, mentions);
                           setReplyText({ ...replyText, [comment.id]: '' });
                           setExpandedComment(null);
                         }}

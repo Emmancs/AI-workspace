@@ -1,11 +1,13 @@
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["postgresqlExtensions"]
+}
+
+// Enable pgvector extension for embeddings
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
 }
 
 enum WorkspaceRole {
@@ -54,6 +56,12 @@ enum NotificationType {
   DISCUSSION_REPLY
 }
 
+enum DocumentPermission {
+  READ
+  WRITE
+  ADMIN
+}
+
 enum SourceType {
   DOCUMENT
   TASK
@@ -91,6 +99,8 @@ model User {
   activityLogs        ActivityLog[]
   aiConversations     AIConversation[]
   aiUsageLogs         AIUsageLog[]
+  documentSharesReceived DocumentShare[]     @relation("DocumentSharedWith")
+  documentSharesSent DocumentShare[]        @relation("DocumentSharedBy")
 
   @@index([email])
 }
@@ -240,6 +250,7 @@ model Document {
   createdBy User              @relation("DocumentCreator", fields: [createdById], references: [id], onDelete: Cascade)
   versions  DocumentVersion[]
   comments  Comment[]
+  shares    DocumentShare[]
 
   @@index([workspaceId])
   @@index([projectId])
@@ -260,12 +271,32 @@ model DocumentVersion {
   @@index([documentId])
 }
 
+model DocumentShare {
+  id             String               @id @default(uuid())
+  documentId     String
+  userId         String
+  permissionLevel DocumentPermission @default(READ)
+  sharedById     String
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user     User     @relation("DocumentSharedWith", fields: [userId], references: [id], onDelete: Cascade)
+  sharedBy User     @relation("DocumentSharedBy", fields: [sharedById], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, userId])
+  @@index([documentId])
+  @@index([userId])
+  @@index([sharedById])
+}
+
 model Comment {
   id         String   @id @default(uuid())
   documentId String
   userId     String
   content    String   @db.Text
   isResolved Boolean  @default(false)
+  mentions   String[] @default([]) // Array of mentioned user IDs
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -282,6 +313,7 @@ model CommentReply {
   commentId String
   userId    String
   content   String   @db.Text
+  mentions  String[] @default([]) // Array of mentioned user IDs
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -470,6 +502,7 @@ model Embedding {
   sourceType  SourceType
   sourceId    String
   content     String     @db.Text
+  vector      Unsupported("vector(1536)")? // OpenAI embedding dimension (1536 for text-embedding-3-small)
   metadata    Json?      @default("{}")
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt

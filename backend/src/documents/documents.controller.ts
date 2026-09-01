@@ -10,7 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { DocumentsService, CreateDocumentDto, UpdateDocumentDto } from './documents.service';
+import { DocumentsService, CreateDocumentDto, UpdateDocumentDto, ShareDocumentDto } from './documents.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -76,5 +76,79 @@ export class DocumentsController {
   @ApiOperation({ summary: 'Archive document (soft delete)' })
   async archiveDocument(@Param('documentId') documentId: string) {
     return this.documentsService.archive(documentId);
+  }
+
+  @Get(':documentId/versions')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all versions of a document' })
+  async getDocumentVersions(@Param('documentId') documentId: string) {
+    return this.documentsService.getVersions(documentId);
+  }
+
+  @Post(':documentId/versions/:versionId/restore')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Restore document to a previous version' })
+  async restoreVersion(
+    @Param('documentId') documentId: string,
+    @Param('versionId') versionId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.documentsService.restoreVersion(documentId, versionId, userId);
+  }
+
+  @Post(':documentId/share')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Share document with a user' })
+  async shareDocument(
+    @Param('documentId') documentId: string,
+    @Body() dto: ShareDocumentDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.documentsService.shareDocument(documentId, dto, userId);
+  }
+
+  @Get(':documentId/shares')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all shares for a document' })
+  async getDocumentShares(@Param('documentId') documentId: string) {
+    return this.documentsService.getDocumentShares(documentId);
+  }
+
+  @Patch(':documentId/share/:userId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update document share permission' })
+  async updateShare(
+    @Param('documentId') documentId: string,
+    @Param('userId') userId: string,
+    @Body() dto: ShareDocumentDto,
+  ) {
+    return this.documentsService.updateShare(documentId, userId, dto.permissionLevel);
+  }
+
+  @Delete(':documentId/share/:userId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Revoke document share from a user' })
+  async unshareDocument(
+    @Param('documentId') documentId: string,
+    @Param('userId') userId: string,
+  ) {
+    return this.documentsService.unshareDocument(documentId, userId);
+  }
+
+  @Get('shared-with-me/:workspaceId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get documents shared with current user' })
+  async getSharedWithMe(
+    @Param('workspaceId') workspaceId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.documentsService.getSharedWithMe(userId, workspaceId);
   }
 }

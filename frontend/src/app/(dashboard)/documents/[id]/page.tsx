@@ -2,11 +2,12 @@
 
 import * as React from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Check, AlertCircle, Clock, Users, Lock, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Check, AlertCircle, Clock, Users, Lock, MessageCircle, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
-import { CommentsThread, CommentData } from '@/components/ui/comments-thread';
-import { useDocument, updateDocument, useComments, addComment, updateComment, deleteComment, addCommentReply, deleteCommentReply } from '@/lib/documents';
+import { CommentsThread, CommentData, MentionableMember } from '@/components/ui/comments-thread';
+import { DocumentSharePanel } from '@/components/ui/document-share-panel';
+import { useDocument, updateDocument, useComments, addComment, updateComment, deleteComment, addCommentReply, deleteCommentReply, useWorkspaceMembers, getDocumentShares, shareDocument, unshareDocument, updateDocumentShare, DocumentShare } from '@/lib/documents';
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -17,13 +18,17 @@ export default function DocumentEditorPage() {
   
   const { document, loading, error } = useDocument(documentId);
   const { comments: apiComments, loading: commentsLoading } = useComments(documentId);
+  const [workspaceId, setWorkspaceId] = React.useState<string>('');
+  const { members, loading: membersLoading } = useWorkspaceMembers(workspaceId);
   
   const [title, setTitle] = React.useState('');
   const [content, setContent] = React.useState<any>(null);
   const [saveStatus, setSaveStatus] = React.useState<SaveStatus>('idle');
   const [lastSaved, setLastSaved] = React.useState<Date | null>(null);
   const [showComments, setShowComments] = React.useState(true);
+  const [showSharing, setShowSharing] = React.useState(false);
   const [comments, setComments] = React.useState<CommentData[]>([]);
+  const [shares, setShares] = React.useState<any[]>([]);
   
   const saveTimeoutRef = React.useRef<NodeJS.Timeout>();
 
@@ -32,6 +37,7 @@ export default function DocumentEditorPage() {
     if (document) {
       setTitle(document.title);
       setContent(document.content);
+      setWorkspaceId(document.workspaceId);
     }
   }, [document]);
 
@@ -56,6 +62,22 @@ export default function DocumentEditorPage() {
       setComments(transformedComments);
     }
   }, [apiComments]);
+
+  // Load shares
+  React.useEffect(() => {
+    if (!documentId) return;
+    
+    const loadShares = async () => {
+      try {
+        const data = await getDocumentShares(documentId);
+        setShares(data || []);
+      } catch (err) {
+        console.error('Failed to load shares:', err);
+      }
+    };
+    
+    loadShares();
+  }, [documentId]);
 
   // Autosave with debounce
   const handleContentChange = (newContent: any) => {
@@ -103,9 +125,9 @@ export default function DocumentEditorPage() {
     }, 1000);
   };
 
-  const handleAddComment = async (content: string) => {
+  const handleAddComment = async (content: string, mentions?: string[]) => {
     try {
-      await addComment(documentId, content);
+      await addComment(documentId, content, mentions);
       // Reload comments from API
       const reloadedComments = await fetch(`/api/comments/document/${documentId}`, {
         headers: {
@@ -134,9 +156,9 @@ export default function DocumentEditorPage() {
     }
   };
 
-  const handleAddReply = async (commentId: string, content: string) => {
+  const handleAddReply = async (commentId: string, content: string, mentions?: string[]) => {
     try {
-      await addCommentReply(commentId, content);
+      await addCommentReply(commentId, content, mentions);
       // Reload comments from API
       const reloadedComments = await fetch(`/api/comments/document/${documentId}`, {
         headers: {
@@ -183,6 +205,36 @@ export default function DocumentEditorPage() {
       setComments(comments.filter(c => c.id !== commentId));
     } catch (err) {
       console.error('Failed to delete comment:', err);
+    }
+  };
+
+  const handleShareDocument = async (userId: string, permission: 'READ' | 'WRITE' | 'ADMIN') => {
+    try {
+      await shareDocument(documentId, userId, permission);
+      const updatedShares = await getDocumentShares(documentId);
+      setShares(updatedShares || []);
+    } catch (err) {
+      console.error('Failed to share document:', err);
+    }
+  };
+
+  const handleUpdateShare = async (userId: string, permission: 'READ' | 'WRITE' | 'ADMIN') => {
+    try {
+      await updateDocumentShare(documentId, userId, permission);
+      const updatedShares = await getDocumentShares(documentId);
+      setShares(updatedShares || []);
+    } catch (err) {
+      console.error('Failed to update share:', err);
+    }
+  };
+
+  const handleUnshareDocument = async (userId: string) => {
+    try {
+      await unshareDocument(documentId, userId);
+      const updatedShares = await getDocumentShares(documentId);
+      setShares(updatedShares || []);
+    } catch (err) {
+      console.error('Failed to unshare document:', err);
     }
   };
 
@@ -269,8 +321,18 @@ export default function DocumentEditorPage() {
             {/* Collaborators */}
             <div className="flex items-center gap-2 text-xs text-slate-400 px-3 py-2 rounded-lg bg-slate-900/50">
               <Users className="w-4 h-4" />
-              <span>Editing</span>
+              <span>{shares.length} shared</span>
             </div>
+
+            {/* Toggle Sharing */}
+            <Button
+              variant={showSharing ? 'gradient' : 'outline'}
+              size="sm"
+              onClick={() => setShowSharing(!showSharing)}
+            >
+              <Share2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Share</span>
+            </Button>
 
             {/* Toggle Comments */}
             <Button
@@ -285,7 +347,7 @@ export default function DocumentEditorPage() {
         </div>
       </div>
 
-      {/* Main Content + Comments */}
+      {/* Main Content + Sidebar */}
       <div className="flex-1 overflow-hidden flex">
         {/* Editor */}
         <div className="flex-1 overflow-y-auto">
@@ -307,31 +369,63 @@ export default function DocumentEditorPage() {
           </div>
         </div>
 
-        {/* Comments Panel */}
-        {showComments && (
+        {/* Sidebar - Comments or Sharing */}
+        {(showComments || showSharing) && (
           <div className="w-96 border-l border-slate-800 bg-dark-900 overflow-y-auto">
-            <div className="sticky top-0 bg-dark-950 border-b border-slate-800 px-4 py-3">
-              <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                <MessageCircle className="w-4 h-4" />
-                Comments ({comments.length})
-              </h3>
-            </div>
-
-            <div className="p-4">
-              {commentsLoading ? (
-                <div className="text-center py-8">
-                  <p className="text-xs text-slate-500">Loading comments...</p>
+            {/* Sharing Panel */}
+            {showSharing && (
+              <>
+                <div className="sticky top-0 bg-dark-950 border-b border-slate-800 px-4 py-3">
+                  <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                    <Share2 className="w-4 h-4" />
+                    Share Document
+                  </h3>
                 </div>
-              ) : (
-                <CommentsThread
-                  comments={comments}
-                  onAddComment={handleAddComment}
-                  onAddReply={handleAddReply}
-                  onResolve={handleResolveComment}
-                  onDeleteComment={handleDeleteComment}
-                />
-              )}
-            </div>
+                <div className="p-4">
+                  <DocumentSharePanel
+                    shares={shares}
+                    onShare={handleShareDocument}
+                    onUpdatePermission={handleUpdateShare}
+                    onRevoke={handleUnshareDocument}
+                    isOwner={document?.createdById === (document?.createdBy?.id || '')}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Comments Panel */}
+            {showComments && !showSharing && (
+              <>
+                <div className="sticky top-0 bg-dark-950 border-b border-slate-800 px-4 py-3">
+                  <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                    <MessageCircle className="w-4 h-4" />
+                    Comments ({comments.length})
+                  </h3>
+                </div>
+
+                <div className="p-4">
+                  {commentsLoading ? (
+                    <div className="text-center py-8">
+                      <p className="text-xs text-slate-500">Loading comments...</p>
+                    </div>
+                  ) : (
+                    <CommentsThread
+                      comments={comments}
+                      members={members.map(m => ({
+                        id: m.userId,
+                        name: m.user.name,
+                        email: m.user.email,
+                        avatarUrl: m.user.avatarUrl,
+                      }))}
+                      onAddComment={handleAddComment}
+                      onAddReply={handleAddReply}
+                      onResolve={handleResolveComment}
+                      onDeleteComment={handleDeleteComment}
+                    />
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

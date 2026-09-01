@@ -16,6 +16,11 @@ export class UpdateDocumentDto {
   isArchived?: boolean;
 }
 
+export class ShareDocumentDto {
+  userId: string;
+  permissionLevel: 'READ' | 'WRITE' | 'ADMIN';
+}
+
 @Injectable()
 export class DocumentsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -118,5 +123,131 @@ export class DocumentsService {
       where: { id: documentId },
       data: { isArchived: true },
     });
+  }
+
+  async getVersions(documentId: string) {
+    const versions = await this.prisma.documentVersion.findMany({
+      where: { documentId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!versions || versions.length === 0) {
+      throw new NotFoundException('No versions found for this document');
+    }
+
+    return versions;
+  }
+
+  async restoreVersion(documentId: string, versionId: string, userId: string) {
+    // Get the version to restore
+    const version = await this.prisma.documentVersion.findUnique({
+      where: { id: versionId },
+    });
+
+    if (!version) {
+      throw new NotFoundException('Version not found');
+    }
+
+    // Update document with version content
+    const restored = await this.prisma.document.update({
+      where: { id: documentId },
+      data: {
+        content: version.content,
+      },
+      include: {
+        createdBy: { select: { id: true, name: true, email: true, avatarUrl: true } },
+      },
+    });
+
+    // Create a new version entry for the restore action
+    await this.prisma.documentVersion.create({
+      data: {
+        title: restored.title,
+        content: version.content,
+        version: await this.prisma.documentVersion.count({ where: { documentId } }) + 1,
+        createdById: userId,
+        documentId,
+      },
+    });
+
+    return restored;
+  }
+
+  async shareDocument(documentId: string, dto: ShareDocumentDto, sharedById: string) {
+    // Verify document exists
+    const doc = await this.prisma.document.findUnique({ where: { id: documentId } });
+    if (!doc) throw new NotFoundException('Document not found');
+
+    // Create or update share
+    return this.prisma.documentShare.upsert({
+      where: { documentId_userId: { documentId, userId: dto.userId } },
+      update: { permissionLevel: dto.permissionLevel as any },
+      create: {
+        documentId,
+        userId: dto.userId,
+        permissionLevel: dto.permissionLevel as any,
+        sharedById,
+      },
+      include: {
+        user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        sharedBy: { select: { id: true, name: true } },
+      },
+    });
+  }
+
+  async getSharedWithMe(userId: string, workspaceId: string) {
+    return this.prisma.documentShare.findMany({
+      where: { userId, document: { workspaceId } },
+      include: {
+        document: {
+          select: { id: true, title: true, updatedAt: true, createdBy: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+        },
+        sharedBy: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getDocumentShares(documentId: string) {
+    return this.prisma.documentShare.findMany({
+      where: { documentId },
+      include: {
+        user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        sharedBy: { select: { id: true, name: true } },
+      },
+    });
+  }
+
+  async updateShare(documentId: string, userId: string, permissionLevel: 'READ' | 'WRITE' | 'ADMIN') {
+    return this.prisma.documentShare.update({
+      where: { documentId_userId: { documentId, userId } },
+      data: { permissionLevel: permissionLevel as any },
+      include: {
+        user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+      },
+    });
+  }
+
+  async unshareDocument(documentId: string, userId: string) {
+    await this.prisma.documentShare.delete({
+      where: { documentId_userId: { documentId, userId } },
+    });
+    return { message: 'Document unshared successfully' };
+  }
+
+  async checkPermission(documentId: string, userId: string): Promise<'READ' | 'WRITE' | 'ADMIN' | null> {
+    const doc = await this.prisma.document.findUnique({ where: { id: documentId }, select: { createdById: true } });
+    if (!doc) return null;
+
+    // Creator has ADMIN access
+    if (doc.createdById === userId) return 'ADMIN';
+
+    // Check shares
+    const share = await this.prisma.documentShare.findUnique({
+      where: { documentId_userId: { documentId, userId } },
+      select: { permissionLevel: true },
+    });
+
+    return (share?.permissionLevel as any) || null;
   }
 }
