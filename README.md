@@ -1,4 +1,4 @@
-# FlowAI Workspace 🚀
+# FlowAI Workspace 
 
 FlowAI Workspace is a production-ready, AI-native collaborative workspace for individuals and high-performing teams.
 
@@ -6,7 +6,7 @@ It combines document editing, project management, real-time team discussions, an
 
 ---
 
-## 🌟 Key Features & Vision
+## Key Features & Vision
 
 - **Collaborative Editor**: Rich Yjs CRDT-based document editor supporting simultaneous real-time document editing, presence cursors, inline comments, and autosave.
 - **Kanban & Project Management**: Multi-view project tracker with epics, tasks, priority sorting, assignee tracking, and AI automated task generation from project specifications.
@@ -17,7 +17,7 @@ It combines document editing, project management, real-time team discussions, an
 
 ---
 
-## 🛠️ Technology Stack
+## Technology Stack
 
 ### Frontend
 - **Framework**: Next.js 15+ (App Router)
@@ -34,7 +34,7 @@ It combines document editing, project management, real-time team discussions, an
 
 ---
 
-## 📁 Repository Architecture
+## Repository Architecture
 
 ```text
 flowai-workspace/
@@ -67,7 +67,7 @@ flowai-workspace/
 
 ---
 
-## ⚡ Quick Start & Running Locally
+## Quick Start & Running Locally
 
 ### Prerequisites
 - Node.js >= 20.x
@@ -103,7 +103,7 @@ Frontend Web application will start at `http://localhost:3000`.
 
 ---
 
-## 🧪 Testing & Verification
+## Testing & Verification
 
 - **Backend Type Check**: `npm --prefix backend run check-types`
 - **Frontend Type Check**: `npm --prefix frontend run check-types`
@@ -111,5 +111,5 @@ Frontend Web application will start at `http://localhost:3000`.
 
 ---
 
-## 📄 License
+## License
 UNLICENSED - Production SaaS Portfolio Project.
