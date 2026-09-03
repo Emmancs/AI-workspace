@@ -21,6 +21,12 @@ export interface SharePermission {
 
 interface DocumentSharePanelProps {
   shares: SharePermission[];
+  members?: Array<{
+    id: string;
+    name: string;
+    email: string;
+    avatarUrl?: string;
+  }>;
   onShare?: (userId: string, permission: 'READ' | 'WRITE' | 'ADMIN') => void;
   onUpdatePermission?: (userId: string, permission: 'READ' | 'WRITE' | 'ADMIN') => void;
   onRevoke?: (userId: string) => void;
@@ -29,6 +35,7 @@ interface DocumentSharePanelProps {
 
 export function DocumentSharePanel({
   shares,
+  members = [],
   onShare,
   onUpdatePermission,
   onRevoke,
@@ -37,6 +44,11 @@ export function DocumentSharePanel({
   const [showAddShare, setShowAddShare] = React.useState(false);
   const [selectedUserId, setSelectedUserId] = React.useState('');
   const [selectedPermission, setSelectedPermission] = React.useState<'READ' | 'WRITE' | 'ADMIN'>('READ');
+
+  const availableMembers = React.useMemo(
+    () => members.filter((member) => !shares.some((share) => share.user.id === member.id)),
+    [members, shares]
+  );
 
   const handleShare = async () => {
     if (selectedUserId) {
@@ -93,7 +105,11 @@ export function DocumentSharePanel({
             className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded text-sm text-white placeholder-slate-500 focus:outline-none focus:border-slate-600"
           >
             <option value="">Choose a user...</option>
-            {/* TODO: Populate with workspace members */}
+            {availableMembers.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.name} ({member.email})
+              </option>
+            ))}
           </select>
 
           <select

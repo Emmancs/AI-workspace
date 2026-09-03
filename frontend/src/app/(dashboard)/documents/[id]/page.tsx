@@ -420,6 +420,12 @@ export default function DocumentEditorPage() {
                 <div className="p-4">
                   <DocumentSharePanel
                     shares={shares}
+                    members={members.map(m => ({
+                      id: m.userId,
+                      name: m.user.name,
+                      email: m.user.email,
+                      avatarUrl: m.user.avatarUrl,
+                    }))}
                     onShare={handleShareDocument}
                     onUpdatePermission={handleUpdateShare}
                     onRevoke={handleUnshareDocument}
