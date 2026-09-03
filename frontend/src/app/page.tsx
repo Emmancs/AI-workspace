@@ -65,7 +65,7 @@ export default function LandingPage() {
           </div>
 
           <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-white font-outfit max-w-4xl mx-auto leading-[1.1]">
-            Your team's workspace, with an AI that <span className="gradient-text">actually knows the work.</span>
+            Your team&apos;s workspace, with an AI that <span className="gradient-text">actually knows the work.</span>
           </h1>
 
           <p className="mt-6 text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto font-normal">
@@ -115,7 +115,7 @@ export default function LandingPage() {
                       <Badge variant="brand">Collaborative Doc</Badge>
                     </div>
                     <p className="text-xs text-slate-300 leading-relaxed font-mono">
-                      "Authentication will use JWT with refresh token rotation stored in httpOnly secure cookies. RBAC logic is enforced on NestJS backend via custom Guards..."
+                      &quot;Authentication will use JWT with refresh token rotation stored in httpOnly secure cookies. RBAC logic is enforced on NestJS backend via custom Guards...&quot;
                     </p>
                     <div className="flex items-center gap-2 pt-2 border-t border-slate-700/40 text-[11px] text-slate-400">
                       <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold">🟢 Alex editing...</span>
@@ -153,7 +153,7 @@ export default function LandingPage() {
                       <span>Workspace AI Assistant</span>
                     </div>
                     <div className="p-2.5 rounded-lg bg-slate-800/70 text-xs text-slate-200">
-                      <span className="text-brand-300 font-semibold">User:</span> "What did we decide about auth strategy?"
+                      <span className="text-brand-300 font-semibold">User:</span> &quot;What did we decide about auth strategy?&quot;
                     </div>
                     <div className="p-2.5 rounded-lg bg-brand-950/60 border border-brand-500/30 text-xs text-slate-200 space-y-1">
                       <span className="text-emerald-400 font-semibold flex items-center gap-1">

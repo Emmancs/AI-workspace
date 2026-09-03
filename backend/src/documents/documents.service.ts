@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 export class CreateDocumentDto {
@@ -267,7 +267,7 @@ export class DocumentsService {
     }
 
     if (document.workspaceId !== workspaceId) {
-      throw new Error('Document does not belong to the requested workspace');
+      throw new ForbiddenException('Document does not belong to the requested workspace');
     }
 
     const workspaceMember = await this.prisma.workspaceMember.findUnique({
@@ -281,7 +281,7 @@ export class DocumentsService {
     });
 
     if (!workspaceMember) {
-      throw new Error('User is not a member of this workspace');
+      throw new ForbiddenException('User is not a member of this workspace');
     }
 
     const creatorAccess = document.createdById === userId;
@@ -293,7 +293,7 @@ export class DocumentsService {
     const accessLevel = creatorAccess ? 'ADMIN' : (directShare?.permissionLevel as 'READ' | 'WRITE' | 'ADMIN' | undefined) ?? null;
 
     if (!accessLevel) {
-      throw new Error('User does not have access to this document');
+      throw new ForbiddenException('User does not have access to this document');
     }
 
     return {

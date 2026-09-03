@@ -11,11 +11,12 @@
   },
   "dependencies": {
     "@tiptap/core": "^2.1.13",
+    "@tiptap/extension-collaboration": "^2.1.13",
+    "@tiptap/extension-image": "^2.1.13",
+    "@tiptap/extension-link": "^2.1.13",
     "@tiptap/pm": "^2.1.13",
     "@tiptap/react": "^2.1.13",
     "@tiptap/starter-kit": "^2.1.13",
-    "@tiptap/extension-link": "^2.1.13",
-    "@tiptap/extension-image": "^2.1.13",
     "clsx": "^2.1.0",
     "framer-motion": "^11.0.5",
     "lucide-react": "^0.330.0",
@@ -23,13 +24,17 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "recharts": "^2.12.0",
-    "tailwind-merge": "^2.2.1"
+    "socket.io-client": "^4.7.5",
+    "tailwind-merge": "^2.2.1",
+    "yjs": "^13.5.1"
   },
   "devDependencies": {
     "@types/node": "^20.11.16",
     "@types/react": "^18.2.55",
     "@types/react-dom": "^18.2.19",
     "autoprefixer": "^10.4.17",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.1.0",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.3.3"

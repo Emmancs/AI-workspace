@@ -84,52 +84,59 @@ export class CollaborationGateway implements OnGatewayConnection, OnGatewayDisco
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: { documentId?: string; workspaceId?: string },
   ) {
-    const user = await this.authenticateClient(client);
-    const documentId = payload?.documentId;
-    const workspaceId = payload?.workspaceId;
+    try {
+      const user = await this.authenticateClient(client);
+      const documentId = payload?.documentId;
+      const workspaceId = payload?.workspaceId;
 
-    if (!documentId || !workspaceId) {
-      throw new ForbiddenException('Document and workspace identifiers are required');
+      if (!documentId || !workspaceId) {
+        throw new ForbiddenException('Document and workspace identifiers are required');
+      }
+
+      const access = await this.documentsService.validateDocumentAccess(documentId, workspaceId, user.id);
+      const room = this.getRoomName(documentId);
+      client.join(room);
+
+      client.data.user = user;
+      client.data.documentId = documentId;
+      client.data.workspaceId = workspaceId;
+      client.data.accessLevel = access.accessLevel;
+
+      const presence: CollaboratorPresence = {
+        userId: user.id,
+        name: user.name,
+        avatarUrl: user.avatarUrl ?? null,
+        status: 'editing',
+        color: this.getUserColor(user.id),
+      };
+
+      const presenceMap = this.documentPresence.get(documentId) ?? new Map<string, CollaboratorPresence>();
+      presenceMap.set(client.id, presence);
+      this.documentPresence.set(documentId, presenceMap);
+
+      const state = this.getOrCreateDocumentState(documentId);
+      const stateUpdate = Array.from(Y.encodeStateAsUpdate(state));
+
+      client.emit('document:initial', {
+        documentId,
+        workspaceId,
+        content: access.document.content ?? {},
+        update: stateUpdate,
+        collaborators: this.getCollaborators(documentId),
+      });
+
+      this.server.to(room).emit('presence:update', {
+        documentId,
+        collaborators: this.getCollaborators(documentId),
+      });
+
+      this.logger.log(`User ${user.email} joined collaboration room for document ${documentId}`);
+    } catch (error) {
+      client.emit('document:error', {
+        message: error instanceof Error ? error.message : 'Unable to join collaboration room',
+      });
+      client.disconnect();
     }
-
-    const access = await this.documentsService.validateDocumentAccess(documentId, workspaceId, user.id);
-    const room = this.getRoomName(documentId);
-    client.join(room);
-
-    client.data.user = user;
-    client.data.documentId = documentId;
-    client.data.workspaceId = workspaceId;
-    client.data.accessLevel = access.accessLevel;
-
-    const presence: CollaboratorPresence = {
-      userId: user.id,
-      name: user.name,
-      avatarUrl: user.avatarUrl ?? null,
-      status: 'editing',
-      color: this.getUserColor(user.id),
-    };
-
-    const presenceMap = this.documentPresence.get(documentId) ?? new Map<string, CollaboratorPresence>();
-    presenceMap.set(client.id, presence);
-    this.documentPresence.set(documentId, presenceMap);
-
-    const state = this.getOrCreateDocumentState(documentId);
-    const stateUpdate = Array.from(Y.encodeStateAsUpdate(state));
-
-    client.emit('document:initial', {
-      documentId,
-      workspaceId,
-      content: access.document.content ?? {},
-      update: stateUpdate,
-      collaborators: this.getCollaborators(documentId),
-    });
-
-    this.server.to(room).emit('presence:update', {
-      documentId,
-      collaborators: this.getCollaborators(documentId),
-    });
-
-    this.logger.log(`User ${user.email} joined collaboration room for document ${documentId}`);
   }
 
   @SubscribeMessage('presence:state')
@@ -167,35 +174,41 @@ export class CollaborationGateway implements OnGatewayConnection, OnGatewayDisco
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: { documentId?: string; workspaceId?: string; update?: number[] },
   ) {
-    const user = client.data.user as { id: string } | undefined;
-    const accessLevel = client.data.accessLevel as 'READ' | 'WRITE' | 'ADMIN' | undefined;
-    const documentId = payload?.documentId ?? client.data.documentId;
-    const workspaceId = payload?.workspaceId ?? client.data.workspaceId;
+    try {
+      const user = client.data.user as { id: string } | undefined;
+      const accessLevel = client.data.accessLevel as 'READ' | 'WRITE' | 'ADMIN' | undefined;
+      const documentId = payload?.documentId ?? client.data.documentId;
+      const workspaceId = payload?.workspaceId ?? client.data.workspaceId;
 
-    if (!user || !documentId || !workspaceId || !payload?.update) {
-      throw new ForbiddenException('Invalid collaboration payload');
+      if (!user || !documentId || !workspaceId || !payload?.update) {
+        throw new ForbiddenException('Invalid collaboration payload');
+      }
+
+      if (!accessLevel || (accessLevel !== 'WRITE' && accessLevel !== 'ADMIN')) {
+        throw new ForbiddenException('Document collaboration requires WRITE access');
+      }
+
+      const access = await this.documentsService.validateDocumentAccess(documentId, workspaceId, user.id);
+      if (access.accessLevel === 'READ') {
+        throw new ForbiddenException('You cannot edit this document');
+      }
+
+      const room = this.getRoomName(documentId);
+      const doc = this.getOrCreateDocumentState(documentId);
+      const update = Uint8Array.from(payload.update);
+      Y.applyUpdate(doc, update, client.id);
+
+      this.server.to(room).emit('document:remote-update', {
+        documentId,
+        workspaceId,
+        update: Array.from(update),
+        senderId: user.id,
+      });
+    } catch (error) {
+      client.emit('document:error', {
+        message: error instanceof Error ? error.message : 'Unable to apply document update',
+      });
     }
-
-    if (!accessLevel || (accessLevel !== 'WRITE' && accessLevel !== 'ADMIN')) {
-      throw new ForbiddenException('Document collaboration requires WRITE access');
-    }
-
-    const access = await this.documentsService.validateDocumentAccess(documentId, workspaceId, user.id);
-    if (access.accessLevel === 'READ') {
-      throw new ForbiddenException('You cannot edit this document');
-    }
-
-    const room = this.getRoomName(documentId);
-    const doc = this.getOrCreateDocumentState(documentId);
-    const update = Uint8Array.from(payload.update);
-    Y.applyUpdate(doc, update, client.id);
-
-    this.server.to(room).emit('document:remote-update', {
-      documentId,
-      workspaceId,
-      update: Array.from(update),
-      senderId: user.id,
-    });
   }
 
   private async authenticateClient(client: Socket) {

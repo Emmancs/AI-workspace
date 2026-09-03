@@ -5,6 +5,9 @@ import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
+import Collaboration from '@tiptap/extension-collaboration';
+import { io, Socket } from 'socket.io-client';
+import * as Y from 'yjs';
 import {
   Bold,
   Italic,
@@ -21,11 +24,17 @@ import {
   Redo2,
 } from 'lucide-react';
 import { Button } from './button';
+import type { CollaborationConfig, CollaboratorPresence, CollaborationStatus } from '@/lib/collaboration';
 
 export interface EditorProps {
   content?: string | object;
   onChange?: (content: object) => void;
   editable?: boolean;
+  collaboration?: CollaborationConfig;
+  onCollaborationStateChange?: (state: {
+    connectionStatus: CollaborationStatus;
+    collaborators: CollaboratorPresence[];
+  }) => void;
 }
 
 const ToolbarButton = ({ 
@@ -181,7 +190,76 @@ const Toolbar = ({ editor }: { editor: Editor }) => {
   );
 };
 
-export function RichTextEditor({ content, onChange, editable = true }: EditorProps) {
+export function RichTextEditor({ content, onChange, editable = true, collaboration, onCollaborationStateChange }: EditorProps) {
+  const yDoc = React.useMemo(() => (collaboration ? new Y.Doc() : null), [collaboration?.documentId]);
+  const socketRef = React.useRef<Socket | null>(null);
+  const [connectionStatus, setConnectionStatus] = React.useState<CollaborationStatus>('offline');
+  const [collaborators, setCollaborators] = React.useState<CollaboratorPresence[]>([]);
+
+  React.useEffect(() => {
+    if (!collaboration || !collaboration.documentId || !collaboration.workspaceId || !collaboration.token) {
+      return;
+    }
+
+    const socket = io(`${collaboration.socketUrl || 'http://localhost:4000'}/collab`, {
+      transports: ['websocket'],
+      auth: {
+        token: `Bearer ${collaboration.token}`,
+      },
+      withCredentials: true,
+    });
+
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      setConnectionStatus('connected');
+      socket.emit('joinDocument', {
+        documentId: collaboration.documentId,
+        workspaceId: collaboration.workspaceId,
+      });
+    });
+
+    socket.on('connect_error', () => {
+      setConnectionStatus('reconnecting');
+    });
+
+    socket.on('disconnect', () => {
+      setConnectionStatus('offline');
+    });
+
+    socket.on('reconnect', () => {
+      setConnectionStatus('connected');
+      socket.emit('joinDocument', {
+        documentId: collaboration.documentId,
+        workspaceId: collaboration.workspaceId,
+      });
+    });
+
+    socket.on('presence:update', (payload: { collaborators?: CollaboratorPresence[] }) => {
+      setCollaborators(payload.collaborators ?? []);
+      onCollaborationStateChange?.({
+        connectionStatus: connectionStatus,
+        collaborators: payload.collaborators ?? [],
+      });
+    });
+
+    socket.on('document:error', (payload: { message?: string }) => {
+      console.error('Collaboration error:', payload?.message || 'Unknown collaboration error');
+    });
+
+    socket.on('document:initial', (payload: { content?: object; documentId?: string }) => {
+      if (payload.documentId && payload.documentId !== collaboration.documentId) return;
+      if (payload.content && editor) {
+        editor.commands.setContent(payload.content, false);
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [collaboration?.documentId, collaboration?.workspaceId, collaboration?.token]);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -195,6 +273,7 @@ export function RichTextEditor({ content, onChange, editable = true }: EditorPro
       Image.configure({
         allowBase64: true,
       }),
+      ...(yDoc ? [Collaboration.configure({ document: yDoc })] : []),
     ],
     content: content || '<p>Start typing...</p>',
     editable,
@@ -202,6 +281,38 @@ export function RichTextEditor({ content, onChange, editable = true }: EditorPro
       onChange?.(editor.getJSON());
     },
   });
+
+  React.useEffect(() => {
+    if (!editor || !yDoc || !collaboration || !socketRef.current) return;
+
+    const handleLocalUpdate = (update: Uint8Array, origin: unknown) => {
+      if (origin === 'remote' || !socketRef.current?.connected) return;
+      socketRef.current.emit('document:update', {
+        documentId: collaboration.documentId,
+        workspaceId: collaboration.workspaceId,
+        update: Array.from(update),
+      });
+    };
+
+    const handleRemoteUpdate = (payload: { documentId?: string; update?: number[]; senderId?: string }) => {
+      if (!payload.documentId || payload.documentId !== collaboration.documentId) return;
+      if (payload.senderId && collaboration.currentUser && payload.senderId === collaboration.currentUser.id) return;
+      if (!payload.update) return;
+      Y.applyUpdate(yDoc, Uint8Array.from(payload.update), 'remote');
+    };
+
+    yDoc.on('update', handleLocalUpdate);
+    socketRef.current.on('document:remote-update', handleRemoteUpdate);
+
+    return () => {
+      yDoc.off('update', handleLocalUpdate);
+      socketRef.current?.off('document:remote-update', handleRemoteUpdate);
+    };
+  }, [editor, yDoc, collaboration]);
+
+  React.useEffect(() => {
+    onCollaborationStateChange?.({ connectionStatus, collaborators });
+  }, [connectionStatus, collaborators, onCollaborationStateChange]);
 
   return (
     <div className="border border-slate-800 rounded-lg overflow-hidden bg-slate-950">

@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { CommentsThread, CommentData, MentionableMember } from '@/components/ui/comments-thread';
 import { DocumentSharePanel } from '@/components/ui/document-share-panel';
+import { useAuth } from '@/lib/auth-context';
+import { type CollaboratorPresence, type CollaborationStatus } from '@/lib/collaboration';
 import { useDocument, updateDocument, useComments, addComment, updateComment, deleteComment, addCommentReply, deleteCommentReply, useWorkspaceMembers, getDocumentShares, shareDocument, unshareDocument, updateDocumentShare, DocumentShare } from '@/lib/documents';
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
@@ -15,11 +17,16 @@ export default function DocumentEditorPage() {
   const params = useParams();
   const router = useRouter();
   const documentId = params.id as string;
+  const { user, token } = useAuth();
   
   const { document, loading, error } = useDocument(documentId);
   const { comments: apiComments, loading: commentsLoading } = useComments(documentId);
   const [workspaceId, setWorkspaceId] = React.useState<string>('');
   const { members, loading: membersLoading } = useWorkspaceMembers(workspaceId);
+  const [collaborationState, setCollaborationState] = React.useState<{ connectionStatus: CollaborationStatus; collaborators: CollaboratorPresence[] }>({
+    connectionStatus: 'offline',
+    collaborators: [],
+  });
   
   const [title, setTitle] = React.useState('');
   const [content, setContent] = React.useState<any>(null);
@@ -29,6 +36,16 @@ export default function DocumentEditorPage() {
   const [showSharing, setShowSharing] = React.useState(false);
   const [comments, setComments] = React.useState<CommentData[]>([]);
   const [shares, setShares] = React.useState<any[]>([]);
+  const collaboration = user && document ? {
+    documentId,
+    workspaceId: document.workspaceId,
+    currentUser: {
+      id: user.id,
+      name: user.name,
+      avatarUrl: user.avatarUrl,
+    },
+    token: token ?? undefined,
+  } : undefined;
   
   const saveTimeoutRef = React.useRef<NodeJS.Timeout>();
 
@@ -320,8 +337,25 @@ export default function DocumentEditorPage() {
 
             {/* Collaborators */}
             <div className="flex items-center gap-2 text-xs text-slate-400 px-3 py-2 rounded-lg bg-slate-900/50">
-              <Users className="w-4 h-4" />
-              <span>{shares.length} shared</span>
+              <div className={`w-2 h-2 rounded-full ${
+                collaborationState.connectionStatus === 'connected' ? 'bg-emerald-400' :
+                collaborationState.connectionStatus === 'reconnecting' ? 'bg-amber-400' : 'bg-rose-400'
+              }`} />
+              <span>{collaborationState.connectionStatus === 'connected' ? 'Connected' : collaborationState.connectionStatus === 'reconnecting' ? 'Reconnecting...' : 'Offline'}</span>
+              {collaborationState.collaborators.length > 0 && (
+                <div className="hidden md:flex items-center gap-1 ml-1">
+                  {collaborationState.collaborators.slice(0, 3).map((collaborator) => (
+                    <div
+                      key={collaborator.id}
+                      title={collaborator.name}
+                      className="w-6 h-6 rounded-full border border-slate-700 bg-slate-800 flex items-center justify-center text-[9px] text-slate-200"
+                      style={{ backgroundColor: collaborator.color ? `${collaborator.color}20` : undefined }}
+                    >
+                      {collaborator.name.slice(0, 1).toUpperCase()}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Toggle Sharing */}
@@ -356,6 +390,8 @@ export default function DocumentEditorPage() {
               content={content}
               onChange={handleContentChange}
               editable={true}
+              collaboration={collaboration}
+              onCollaborationStateChange={setCollaborationState}
             />
 
             {/* Document Info */}
