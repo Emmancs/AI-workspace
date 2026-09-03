@@ -16,6 +16,7 @@ It combines document editing, project management, real-time team discussions, an
 - **Production Architecture**: Built as a modular monolith ready for horizontal scaling via Redis Pub/Sub.
 
 ---
+---
 
 ## Technology Stack
 
