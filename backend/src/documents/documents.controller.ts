@@ -21,7 +21,7 @@ export class DocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}
 
   @Get('workspace/:workspaceId')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List documents in a workspace' })
   async getDocumentsByWorkspace(
@@ -34,7 +34,7 @@ export class DocumentsController {
   }
 
   @Get(':documentId')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get document details with comments and history' })
   async getDocument(@Param('documentId') documentId: string, @CurrentUser('id') userId: string) {
@@ -42,7 +42,7 @@ export class DocumentsController {
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new document' })
   async createDocument(
@@ -53,7 +53,7 @@ export class DocumentsController {
   }
 
   @Patch(':documentId')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update document content or metadata' })
   async updateDocument(
@@ -65,7 +65,7 @@ export class DocumentsController {
   }
 
   @Delete(':documentId')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete document permanently' })
   async deleteDocument(@Param('documentId') documentId: string, @CurrentUser('id') userId: string) {
@@ -73,7 +73,7 @@ export class DocumentsController {
   }
 
   @Patch(':documentId/archive')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Archive document (soft delete)' })
   async archiveDocument(@Param('documentId') documentId: string, @CurrentUser('id') userId: string) {
@@ -81,7 +81,7 @@ export class DocumentsController {
   }
 
   @Get(':documentId/versions')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all versions of a document' })
   async getDocumentVersions(@Param('documentId') documentId: string, @CurrentUser('id') userId: string) {
@@ -89,7 +89,7 @@ export class DocumentsController {
   }
 
   @Post(':documentId/versions/:versionId/restore')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Restore document to a previous version' })
   async restoreVersion(
@@ -101,7 +101,7 @@ export class DocumentsController {
   }
 
   @Post(':documentId/share')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Share document with a user' })
   async shareDocument(
@@ -113,7 +113,7 @@ export class DocumentsController {
   }
 
   @Get(':documentId/shares')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all shares for a document' })
   async getDocumentShares(
@@ -124,7 +124,7 @@ export class DocumentsController {
   }
 
   @Patch(':documentId/share/:userId')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update document share permission' })
   async updateShare(

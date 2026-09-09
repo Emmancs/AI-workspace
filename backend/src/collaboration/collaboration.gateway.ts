@@ -202,7 +202,7 @@ export class CollaborationGateway implements OnGatewayConnection, OnGatewayDisco
         documentId,
         workspaceId,
         update: Array.from(update),
-        senderId: user.id,
+        senderSocketId: client.id,
       });
     } catch (error) {
       client.emit('document:error', {

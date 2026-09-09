@@ -192,6 +192,7 @@ const Toolbar = ({ editor }: { editor: Editor }) => {
 
 export function RichTextEditor({ content, onChange, editable = true, collaboration, onCollaborationStateChange }: EditorProps) {
   const yDoc = React.useMemo(() => (collaboration ? new Y.Doc() : null), [collaboration?.documentId]);
+  const editorRef = React.useRef<Editor | null>(null);
   const socketRef = React.useRef<Socket | null>(null);
   const [connectionStatus, setConnectionStatus] = React.useState<CollaborationStatus>('offline');
   const [collaborators, setCollaborators] = React.useState<CollaboratorPresence[]>([]);
@@ -238,7 +239,7 @@ export function RichTextEditor({ content, onChange, editable = true, collaborati
     socket.on('presence:update', (payload: { collaborators?: CollaboratorPresence[] }) => {
       setCollaborators(payload.collaborators ?? []);
       onCollaborationStateChange?.({
-        connectionStatus: connectionStatus,
+        connectionStatus: 'connected',
         collaborators: payload.collaborators ?? [],
       });
     });
@@ -247,10 +248,14 @@ export function RichTextEditor({ content, onChange, editable = true, collaborati
       console.error('Collaboration error:', payload?.message || 'Unknown collaboration error');
     });
 
-    socket.on('document:initial', (payload: { content?: object; documentId?: string }) => {
+    socket.on('document:initial', (payload: { content?: object; documentId?: string; update?: number[] }) => {
       if (payload.documentId && payload.documentId !== collaboration.documentId) return;
-      if (payload.content && editor) {
-        editor.commands.setContent(payload.content, false);
+      if (!editorRef.current || !yDoc) return;
+
+      if (payload.update?.length) {
+        Y.applyUpdate(yDoc, Uint8Array.from(payload.update), 'remote');
+      } else if (payload.content) {
+        editorRef.current.commands.setContent(payload.content);
       }
     });
 
@@ -258,7 +263,7 @@ export function RichTextEditor({ content, onChange, editable = true, collaborati
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [collaboration?.documentId, collaboration?.workspaceId, collaboration?.token]);
+  }, [collaboration?.documentId, collaboration?.workspaceId, collaboration?.token, yDoc, onCollaborationStateChange]);
 
   const editor = useEditor({
     extensions: [
@@ -281,6 +286,7 @@ export function RichTextEditor({ content, onChange, editable = true, collaborati
       onChange?.(editor.getJSON());
     },
   });
+  editorRef.current = editor;
 
   React.useEffect(() => {
     if (!editor || !yDoc || !collaboration || !socketRef.current) return;
@@ -294,9 +300,9 @@ export function RichTextEditor({ content, onChange, editable = true, collaborati
       });
     };
 
-    const handleRemoteUpdate = (payload: { documentId?: string; update?: number[]; senderId?: string }) => {
+    const handleRemoteUpdate = (payload: { documentId?: string; update?: number[]; senderSocketId?: string }) => {
       if (!payload.documentId || payload.documentId !== collaboration.documentId) return;
-      if (payload.senderId && collaboration.currentUser && payload.senderId === collaboration.currentUser.id) return;
+      if (payload.senderSocketId === socketRef.current?.id) return;
       if (!payload.update) return;
       Y.applyUpdate(yDoc, Uint8Array.from(payload.update), 'remote');
     };

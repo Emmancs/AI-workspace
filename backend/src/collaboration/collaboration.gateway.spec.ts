@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { DocumentsService } from '../documents/documents.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CollaborationGateway } from './collaboration.gateway';
+import * as Y from 'yjs';
 
 describe('DocumentsService.validateDocumentAccess', () => {
   const prisma: any = {
@@ -81,5 +82,78 @@ describe('CollaborationGateway.authenticateClient', () => {
     await expect((gateway as any).authenticateClient({
       handshake: { auth: { token: 'bad-token' }, headers: {} },
     })).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+});
+
+describe('CollaborationGateway.handleDocumentUpdate', () => {
+  const documentsService = {
+    validateDocumentAccess: jest.fn(),
+  } as unknown as DocumentsService;
+  const gateway = new CollaborationGateway(
+    {} as PrismaService,
+    documentsService,
+    {} as JwtService,
+  );
+  const emit = jest.fn();
+  const room = { emit };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (gateway as any).server = {
+      to: jest.fn().mockReturnValue(room),
+    };
+  });
+
+  it('rejects updates from READ collaborators', async () => {
+    const client = {
+      id: 'socket-read',
+      data: {
+        user: { id: 'user-read' },
+        accessLevel: 'READ',
+        documentId: 'doc-1',
+        workspaceId: 'ws-1',
+      },
+      emit: jest.fn(),
+    };
+
+    await (gateway as any).handleDocumentUpdate(client, {
+      documentId: 'doc-1',
+      workspaceId: 'ws-1',
+      update: [1, 2, 3],
+    });
+
+    expect(client.emit).toHaveBeenCalledWith('document:error', {
+      message: 'Document collaboration requires WRITE access',
+    });
+    expect(emit).not.toHaveBeenCalled();
+  });
+
+  it('broadcasts accepted updates with the originating socket ID', async () => {
+    documentsService.validateDocumentAccess = jest.fn().mockResolvedValue({
+      accessLevel: 'WRITE',
+    });
+    const client = {
+      id: 'socket-write',
+      data: {
+        user: { id: 'user-write' },
+        accessLevel: 'WRITE',
+        documentId: 'doc-2',
+        workspaceId: 'ws-2',
+      },
+      emit: jest.fn(),
+    };
+    const source = new Y.Doc();
+    source.getMap('content').set('value', 'update');
+
+    await (gateway as any).handleDocumentUpdate(client, {
+      documentId: 'doc-2',
+      workspaceId: 'ws-2',
+      update: Array.from(Y.encodeStateAsUpdate(source)),
+    });
+
+    expect(emit).toHaveBeenCalledWith('document:remote-update', expect.objectContaining({
+      documentId: 'doc-2',
+      senderSocketId: 'socket-write',
+    }));
   });
 });
