@@ -34,10 +34,13 @@ function DocumentsListContent() {
           </p>
         </div>
 
-        <Button variant="gradient" size="sm">
+        <Link
+          href={`/documents/new${workspaceId ? `?workspace=${workspaceId}` : ''}`}
+          className="gradient-brand text-white shadow-lg shadow-indigo-500/30 hover:brightness-110 border border-indigo-400/30 inline-flex items-center justify-center font-medium rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-brand-500/50 px-3 py-1.5 text-xs gap-1.5"
+        >
           <Plus className="w-4 h-4" />
           <span>New Document</span>
-        </Button>
+        </Link>
       </div>
 
       {/* Search & Filter */}
@@ -77,10 +80,13 @@ function DocumentsListContent() {
           </div>
           <h3 className="text-lg font-semibold text-slate-300 mb-1">No documents yet</h3>
           <p className="text-slate-400 text-sm mb-6">Create your first document to get started</p>
-          <Button variant="gradient" size="sm">
+          <Link
+            href={`/documents/new${workspaceId ? `?workspace=${workspaceId}` : ''}`}
+            className="gradient-brand text-white shadow-lg shadow-indigo-500/30 hover:brightness-110 border border-indigo-400/30 inline-flex items-center justify-center font-medium rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-brand-500/50 px-3 py-1.5 text-xs gap-1.5"
+          >
             <Plus className="w-4 h-4" />
             <span>Create Document</span>
-          </Button>
+          </Link>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

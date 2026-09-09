@@ -20,7 +20,7 @@ export default function DocumentEditorPage() {
   const { user, token } = useAuth();
   
   const { document, loading, error } = useDocument(documentId);
-  const { comments: apiComments, loading: commentsLoading } = useComments(documentId);
+  const { comments: apiComments, loading: commentsLoading, refetch: refetchComments } = useComments(documentId);
   const [workspaceId, setWorkspaceId] = React.useState<string>('');
   const { members, loading: membersLoading } = useWorkspaceMembers(workspaceId);
   const [collaborationState, setCollaborationState] = React.useState<{ connectionStatus: CollaborationStatus; collaborators: CollaboratorPresence[] }>({
@@ -145,29 +145,7 @@ export default function DocumentEditorPage() {
   const handleAddComment = async (content: string, mentions?: string[]) => {
     try {
       await addComment(documentId, content, mentions);
-      // Reload comments from API
-      const reloadedComments = await fetch(`/api/comments/document/${documentId}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-        },
-      }).then(res => res.json());
-      
-      const transformedComments = reloadedComments.map((comment: any) => ({
-        id: comment.id,
-        author: comment.user.name,
-        authorAvatar: comment.user.avatarUrl,
-        content: comment.content,
-        timestamp: new Date(comment.createdAt),
-        isResolved: comment.isResolved,
-        replies: comment.replies.map((reply: any) => ({
-          id: reply.id,
-          author: reply.user.name,
-          authorAvatar: reply.user.avatarUrl,
-          content: reply.content,
-          timestamp: new Date(reply.createdAt),
-        })),
-      }));
-      setComments(transformedComments);
+      await refetchComments();
     } catch (err) {
       console.error('Failed to add comment:', err);
     }
@@ -176,29 +154,7 @@ export default function DocumentEditorPage() {
   const handleAddReply = async (commentId: string, content: string, mentions?: string[]) => {
     try {
       await addCommentReply(commentId, content, mentions);
-      // Reload comments from API
-      const reloadedComments = await fetch(`/api/comments/document/${documentId}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-        },
-      }).then(res => res.json());
-      
-      const transformedComments = reloadedComments.map((comment: any) => ({
-        id: comment.id,
-        author: comment.user.name,
-        authorAvatar: comment.user.avatarUrl,
-        content: comment.content,
-        timestamp: new Date(comment.createdAt),
-        isResolved: comment.isResolved,
-        replies: comment.replies.map((reply: any) => ({
-          id: reply.id,
-          author: reply.user.name,
-          authorAvatar: reply.user.avatarUrl,
-          content: reply.content,
-          timestamp: new Date(reply.createdAt),
-        })),
-      }));
-      setComments(transformedComments);
+      await refetchComments();
     } catch (err) {
       console.error('Failed to add reply:', err);
     }

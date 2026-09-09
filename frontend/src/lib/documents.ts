@@ -76,25 +76,30 @@ export function useDocuments(workspaceId: string) {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
-    if (!workspaceId) return;
+  const fetchDocuments = React.useCallback(async () => {
+    if (!workspaceId) {
+      setDocuments([]);
+      setLoading(false);
+      return;
+    }
 
-    const fetchDocuments = async () => {
-      try {
-        setLoading(true);
-        const data = await apiFetch<Document[]>(`/documents/workspace/${workspaceId}`);
-        setDocuments(data || []);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch documents');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDocuments();
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await apiFetch<Document[]>(`/documents/workspace/${workspaceId}`);
+      setDocuments(data || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch documents');
+    } finally {
+      setLoading(false);
+    }
   }, [workspaceId]);
 
-  return { documents, loading, error, refetch: () => {} };
+  React.useEffect(() => {
+    fetchDocuments();
+  }, [fetchDocuments]);
+
+  return { documents, loading, error, refetch: fetchDocuments };
 }
 
 export function useDocument(documentId: string) {
@@ -174,25 +179,30 @@ export function useComments(documentId: string) {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
-    if (!documentId) return;
+  const fetchComments = React.useCallback(async () => {
+    if (!documentId) {
+      setComments([]);
+      setLoading(false);
+      return;
+    }
 
-    const fetchComments = async () => {
-      try {
-        setLoading(true);
-        const data = await apiFetch<Comment[]>(`/comments/document/${documentId}`);
-        setComments(data || []);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch comments');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchComments();
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await apiFetch<Comment[]>(`/comments/document/${documentId}`);
+      setComments(data || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch comments');
+    } finally {
+      setLoading(false);
+    }
   }, [documentId]);
 
-  return { comments, loading, error };
+  React.useEffect(() => {
+    fetchComments();
+  }, [fetchComments]);
+
+  return { comments, loading, error, refetch: fetchComments };
 }
 
 export async function addComment(documentId: string, content: string, mentions?: string[]) {

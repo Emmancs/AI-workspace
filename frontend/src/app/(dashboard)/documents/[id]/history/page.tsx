@@ -26,15 +26,7 @@ export default function DocumentHistoryPage() {
     const fetchVersions = async () => {
       try {
         setVersionsLoading(true);
-        const response = await fetch(`/api/documents/${documentId}/versions`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-          },
-        });
-        
-        if (!response.ok) throw new Error('Failed to fetch versions');
-        
-        const data = await response.json();
+        const data = await getDocumentVersions(documentId);
         setVersions(data || []);
         
         if (data && data.length > 0) {
@@ -55,15 +47,7 @@ export default function DocumentHistoryPage() {
       setRestoring(true);
       setRestoringError(null);
       
-      const response = await fetch(`/api/documents/${documentId}/versions/${versionId}/restore`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-        },
-      });
-      
-      if (!response.ok) throw new Error('Failed to restore version');
-      
+      await restoreDocumentVersion(documentId, versionId);
       // Redirect to editor
       router.push(`/documents/${documentId}`);
     } catch (err) {
