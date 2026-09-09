@@ -28,16 +28,17 @@ export class DocumentsController {
     @Param('workspaceId') workspaceId: string,
     @Query('search') search?: string,
     @Query('projectId') projectId?: string,
+    @CurrentUser('id') userId?: string,
   ) {
-    return this.documentsService.findByWorkspace(workspaceId, { search, projectId });
+    return this.documentsService.findByWorkspace(workspaceId, userId!, { search, projectId });
   }
 
   @Get(':documentId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get document details with comments and history' })
-  async getDocument(@Param('documentId') documentId: string) {
-    return this.documentsService.findById(documentId);
+  async getDocument(@Param('documentId') documentId: string, @CurrentUser('id') userId: string) {
+    return this.documentsService.findById(documentId, userId);
   }
 
   @Post()
@@ -58,32 +59,33 @@ export class DocumentsController {
   async updateDocument(
     @Param('documentId') documentId: string,
     @Body() dto: UpdateDocumentDto,
+    @CurrentUser('id') userId: string,
   ) {
-    return this.documentsService.update(documentId, dto);
+    return this.documentsService.update(documentId, dto, userId);
   }
 
   @Delete(':documentId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete document permanently' })
-  async deleteDocument(@Param('documentId') documentId: string) {
-    return this.documentsService.delete(documentId);
+  async deleteDocument(@Param('documentId') documentId: string, @CurrentUser('id') userId: string) {
+    return this.documentsService.delete(documentId, userId);
   }
 
   @Patch(':documentId/archive')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Archive document (soft delete)' })
-  async archiveDocument(@Param('documentId') documentId: string) {
-    return this.documentsService.archive(documentId);
+  async archiveDocument(@Param('documentId') documentId: string, @CurrentUser('id') userId: string) {
+    return this.documentsService.archive(documentId, userId);
   }
 
   @Get(':documentId/versions')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all versions of a document' })
-  async getDocumentVersions(@Param('documentId') documentId: string) {
-    return this.documentsService.getVersions(documentId);
+  async getDocumentVersions(@Param('documentId') documentId: string, @CurrentUser('id') userId: string) {
+    return this.documentsService.getVersions(documentId, userId);
   }
 
   @Post(':documentId/versions/:versionId/restore')
@@ -114,8 +116,11 @@ export class DocumentsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all shares for a document' })
-  async getDocumentShares(@Param('documentId') documentId: string) {
-    return this.documentsService.getDocumentShares(documentId);
+  async getDocumentShares(
+    @Param('documentId') documentId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.documentsService.getDocumentShares(documentId, userId);
   }
 
   @Patch(':documentId/share/:userId')
@@ -124,10 +129,11 @@ export class DocumentsController {
   @ApiOperation({ summary: 'Update document share permission' })
   async updateShare(
     @Param('documentId') documentId: string,
-    @Param('userId') userId: string,
+    @Param('userId') targetUserId: string,
     @Body() dto: ShareDocumentDto,
+    @CurrentUser('id') userId: string,
   ) {
-    return this.documentsService.updateShare(documentId, userId, dto.permissionLevel);
+    return this.documentsService.updateShare(documentId, targetUserId, dto.permissionLevel, userId);
   }
 
   @Delete(':documentId/share/:userId')
@@ -136,9 +142,10 @@ export class DocumentsController {
   @ApiOperation({ summary: 'Revoke document share from a user' })
   async unshareDocument(
     @Param('documentId') documentId: string,
-    @Param('userId') userId: string,
+    @Param('userId') targetUserId: string,
+    @CurrentUser('id') userId: string,
   ) {
-    return this.documentsService.unshareDocument(documentId, userId);
+    return this.documentsService.unshareDocument(documentId, targetUserId, userId);
   }
 
   @Get('shared-with-me/:workspaceId')

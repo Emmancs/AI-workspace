@@ -25,7 +25,8 @@ export class ShareDocumentDto {
 export class DocumentsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findByWorkspace(workspaceId: string, filters?: { search?: string; projectId?: string }) {
+  async findByWorkspace(workspaceId: string, userId: string, filters?: { search?: string; projectId?: string }) {
+    await this.assertWorkspaceMember(workspaceId, userId);
     const where: any = { workspaceId, isArchived: false };
     if (filters?.projectId) where.projectId = filters.projectId;
     if (filters?.search) {
@@ -46,7 +47,8 @@ export class DocumentsService {
     });
   }
 
-  async findById(documentId: string) {
+  async findById(documentId: string, userId: string) {
+    await this.assertDocumentAccess(documentId, userId, 'READ');
     const document = await this.prisma.document.findUnique({
       where: { id: documentId },
       include: {
@@ -68,6 +70,7 @@ export class DocumentsService {
   }
 
   async create(dto: CreateDocumentDto, userId: string) {
+    await this.assertWorkspaceMember(dto.workspaceId, userId);
     return this.prisma.document.create({
       data: {
         workspaceId: dto.workspaceId,
@@ -83,7 +86,8 @@ export class DocumentsService {
     });
   }
 
-  async update(documentId: string, dto: UpdateDocumentDto) {
+  async update(documentId: string, dto: UpdateDocumentDto, userId: string) {
+    await this.assertDocumentAccess(documentId, userId, 'WRITE');
     const updated = await this.prisma.document.update({
       where: { id: documentId },
       data: {
@@ -113,19 +117,22 @@ export class DocumentsService {
     return updated;
   }
 
-  async delete(documentId: string) {
+  async delete(documentId: string, userId: string) {
+    await this.assertDocumentAccess(documentId, userId, 'ADMIN');
     await this.prisma.document.delete({ where: { id: documentId } });
     return { message: 'Document deleted successfully' };
   }
 
-  async archive(documentId: string) {
+  async archive(documentId: string, userId: string) {
+    await this.assertDocumentAccess(documentId, userId, 'ADMIN');
     return this.prisma.document.update({
       where: { id: documentId },
       data: { isArchived: true },
     });
   }
 
-  async getVersions(documentId: string) {
+  async getVersions(documentId: string, userId: string) {
+    await this.assertDocumentAccess(documentId, userId, 'READ');
     const versions = await this.prisma.documentVersion.findMany({
       where: { documentId },
       orderBy: { createdAt: 'desc' },
@@ -139,6 +146,7 @@ export class DocumentsService {
   }
 
   async restoreVersion(documentId: string, versionId: string, userId: string) {
+    await this.assertDocumentAccess(documentId, userId, 'WRITE');
     // Get the version to restore
     const version = await this.prisma.documentVersion.findUnique({
       where: { id: versionId },
@@ -174,6 +182,7 @@ export class DocumentsService {
   }
 
   async shareDocument(documentId: string, dto: ShareDocumentDto, sharedById: string) {
+    await this.assertDocumentAccess(documentId, sharedById, 'ADMIN');
     // Verify document exists
     const doc = await this.prisma.document.findUnique({ where: { id: documentId } });
     if (!doc) throw new NotFoundException('Document not found');
@@ -208,7 +217,8 @@ export class DocumentsService {
     });
   }
 
-  async getDocumentShares(documentId: string) {
+  async getDocumentShares(documentId: string, userId: string) {
+    await this.assertDocumentAccess(documentId, userId, 'ADMIN');
     return this.prisma.documentShare.findMany({
       where: { documentId },
       include: {
@@ -218,9 +228,10 @@ export class DocumentsService {
     });
   }
 
-  async updateShare(documentId: string, userId: string, permissionLevel: 'READ' | 'WRITE' | 'ADMIN') {
+  async updateShare(documentId: string, targetUserId: string, permissionLevel: 'READ' | 'WRITE' | 'ADMIN', userId: string) {
+    await this.assertDocumentAccess(documentId, userId, 'ADMIN');
     return this.prisma.documentShare.update({
-      where: { documentId_userId: { documentId, userId } },
+      where: { documentId_userId: { documentId, userId: targetUserId } },
       data: { permissionLevel: permissionLevel as any },
       include: {
         user: { select: { id: true, name: true, email: true, avatarUrl: true } },
@@ -228,9 +239,10 @@ export class DocumentsService {
     });
   }
 
-  async unshareDocument(documentId: string, userId: string) {
+  async unshareDocument(documentId: string, targetUserId: string, userId: string) {
+    await this.assertDocumentAccess(documentId, userId, 'ADMIN');
     await this.prisma.documentShare.delete({
-      where: { documentId_userId: { documentId, userId } },
+      where: { documentId_userId: { documentId, userId: targetUserId } },
     });
     return { message: 'Document unshared successfully' };
   }
@@ -300,5 +312,45 @@ export class DocumentsService {
       document,
       accessLevel,
     };
+  }
+
+  private async assertWorkspaceMember(workspaceId: string, userId: string) {
+    const member = await this.prisma.workspaceMember.findUnique({
+      where: { workspaceId_userId: { workspaceId, userId } },
+      select: { id: true },
+    });
+
+    if (!member) {
+      throw new ForbiddenException('User is not a member of this workspace');
+    }
+  }
+
+  private async assertDocumentAccess(
+    documentId: string,
+    userId: string,
+    required: 'READ' | 'WRITE' | 'ADMIN',
+  ) {
+    const document = await this.prisma.document.findUnique({
+      where: { id: documentId },
+      select: { workspaceId: true, createdById: true },
+    });
+
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+
+    await this.assertWorkspaceMember(document.workspaceId, userId);
+
+    const permission = document.createdById === userId
+      ? 'ADMIN'
+      : (await this.prisma.documentShare.findUnique({
+          where: { documentId_userId: { documentId, userId } },
+          select: { permissionLevel: true },
+        }))?.permissionLevel;
+
+    const levels = { READ: 1, WRITE: 2, ADMIN: 3 };
+    if (!permission || levels[permission] < levels[required]) {
+      throw new ForbiddenException('User does not have access to this document');
+    }
   }
 }
