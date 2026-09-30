@@ -13,18 +13,19 @@ export default function DashboardLayout({
 }) {
   const [aiDrawerOpen, setAiDrawerOpen] = React.useState(false);
   const [aiInput, setAiInput] = React.useState('');
+  const [isAiLoading, setIsAiLoading] = React.useState(false);
+  const [conversationId, setConversationId] = React.useState<string | undefined>(undefined);
   const [aiMessages, setAiMessages] = React.useState<Array<{ id: string; role: 'user' | 'assistant'; text: string; sources?: string[] }>>([
     {
       id: '1',
       role: 'assistant',
-      text: 'Hello Emmanuel! I am your FlowAI Workspace assistant. I have full knowledge of your documents, tasks, and team discussions. What can I help you with today?',
-      sources: ['FlowAI Architecture Spec', 'E-Commerce Tasks']
+      text: 'Hello! I am your FlowAI Workspace assistant. How can I help you today?',
     }
   ]);
 
-  const handleSendAi = (e: React.FormEvent) => {
+  const handleSendAi = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!aiInput.trim()) return;
+    if (!aiInput.trim() || isAiLoading) return;
 
     const userText = aiInput;
     setAiInput('');
@@ -32,18 +33,41 @@ export default function DashboardLayout({
       ...prev,
       { id: Date.now().toString(), role: 'user', text: userText }
     ]);
+    setIsAiLoading(true);
 
-    setTimeout(() => {
+    try {
+      const { apiFetch } = await import('@/lib/api-client');
+      // Adding explicit generic to avoid Type instantiation is excessively deep error
+      const data = await apiFetch<any>('/ai/chat', {
+        method: 'POST',
+        body: JSON.stringify({ message: userText, conversationId }),
+      });
+      
+      if (data.conversationId) {
+        setConversationId(data.conversationId);
+      }
+
+      setAiMessages(prev => [
+        ...prev,
+        {
+          id: data.id || (Date.now() + 1).toString(),
+          role: 'assistant',
+          text: data.text || 'Sorry, I could not generate a response.',
+        }
+      ]);
+    } catch (error: any) {
+      console.error('AI chat error:', error);
       setAiMessages(prev => [
         ...prev,
         {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          text: `Retrieved context for "${userText}": Currently, there are 8 active projects and 34 tasks. The main authentication architecture is configured with JWT tokens & Redis pub/sub session state.`,
-          sources: ['JWT Discussion Channel', 'Architecture Doc']
+          text: 'Sorry, an error occurred while processing your request.',
         }
       ]);
-    }, 800);
+    } finally {
+      setIsAiLoading(false);
+    }
   };
 
   return (
@@ -121,9 +145,10 @@ export default function DashboardLayout({
                 value={aiInput}
                 onChange={(e) => setAiInput(e.target.value)}
                 placeholder="Ask anything about docs, tasks, or discussions..."
-                className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500"
+                disabled={isAiLoading}
+                className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 disabled:opacity-50"
               />
-              <Button type="submit" variant="gradient" size="sm">
+              <Button type="submit" variant="gradient" size="sm" disabled={isAiLoading || !aiInput.trim()}>
                 <Send className="w-4 h-4" />
               </Button>
             </form>
