@@ -172,7 +172,7 @@ export class CollaborationGateway implements OnGatewayConnection, OnGatewayDisco
   @SubscribeMessage('document:update')
   async handleDocumentUpdate(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: { documentId?: string; workspaceId?: string; update?: number[] },
+    @MessageBody() payload: { documentId?: string; workspaceId?: string; update?: number[]; content?: any; plainText?: string },
   ) {
     try {
       const user = client.data.user as { id: string } | undefined;
@@ -197,6 +197,10 @@ export class CollaborationGateway implements OnGatewayConnection, OnGatewayDisco
       const doc = this.getOrCreateDocumentState(documentId);
       const update = Uint8Array.from(payload.update);
       Y.applyUpdate(doc, update, client.id);
+
+      if (payload.content) {
+        await this.documentsService.persistCollaborationContent(documentId, payload.content, payload.plainText, user.id);
+      }
 
       this.server.to(room).emit('document:remote-update', {
         documentId,

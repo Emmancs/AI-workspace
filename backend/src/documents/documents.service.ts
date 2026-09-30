@@ -117,6 +117,14 @@ export class DocumentsService {
     return updated;
   }
 
+  async persistCollaborationContent(documentId: string, content: any, plainText: string | undefined, userId: string) {
+    await this.assertDocumentAccess(documentId, userId, 'WRITE');
+    return this.prisma.document.update({
+      where: { id: documentId },
+      data: { content, plainText },
+    });
+  }
+
   async delete(documentId: string, userId: string) {
     await this.assertDocumentAccess(documentId, userId, 'ADMIN');
     await this.prisma.document.delete({ where: { id: documentId } });

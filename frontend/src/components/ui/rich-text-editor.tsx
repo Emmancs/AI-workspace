@@ -297,6 +297,8 @@ export function RichTextEditor({ content, onChange, editable = true, collaborati
         documentId: collaboration.documentId,
         workspaceId: collaboration.workspaceId,
         update: Array.from(update),
+        content: editorRef.current?.getJSON(),
+        plainText: editorRef.current?.getText(),
       });
     };
 

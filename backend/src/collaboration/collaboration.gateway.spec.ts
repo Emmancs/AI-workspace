@@ -132,6 +132,7 @@ describe('CollaborationGateway.handleDocumentUpdate', () => {
     documentsService.validateDocumentAccess = jest.fn().mockResolvedValue({
       accessLevel: 'WRITE',
     });
+    documentsService.persistCollaborationContent = jest.fn().mockResolvedValue({});
     const client = {
       id: 'socket-write',
       data: {
@@ -149,11 +150,93 @@ describe('CollaborationGateway.handleDocumentUpdate', () => {
       documentId: 'doc-2',
       workspaceId: 'ws-2',
       update: Array.from(Y.encodeStateAsUpdate(source)),
+      content: { type: 'doc', content: [] },
+      plainText: '',
     });
 
+    expect(documentsService.persistCollaborationContent).toHaveBeenCalledWith(
+      'doc-2',
+      { type: 'doc', content: [] },
+      '',
+      'user-write',
+    );
     expect(emit).toHaveBeenCalledWith('document:remote-update', expect.objectContaining({
       documentId: 'doc-2',
       senderSocketId: 'socket-write',
     }));
+  });
+});
+
+describe('CollaborationGateway room lifecycle', () => {
+  const documentsService = {
+    validateDocumentAccess: jest.fn(),
+  } as unknown as DocumentsService;
+  const gateway = new CollaborationGateway(
+    {} as PrismaService,
+    documentsService,
+    {} as JwtService,
+  );
+  const room = { emit: jest.fn() };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (gateway as any).server = {
+      to: jest.fn().mockReturnValue(room),
+    };
+    (gateway as any).authenticateClient = jest.fn().mockResolvedValue({
+      id: 'user-1',
+      email: 'user@example.com',
+      name: 'User One',
+      avatarUrl: null,
+    });
+  });
+
+  it('disconnects clients that fail document access validation', async () => {
+    documentsService.validateDocumentAccess = jest.fn().mockRejectedValue(new Error('User does not have access to this document'));
+    const client = {
+      id: 'socket-denied',
+      data: {},
+      join: jest.fn(),
+      emit: jest.fn(),
+      disconnect: jest.fn(),
+    };
+
+    await (gateway as any).handleJoinDocument(client, { documentId: 'doc-1', workspaceId: 'ws-1' });
+
+    expect(client.emit).toHaveBeenCalledWith('document:error', {
+      message: 'User does not have access to this document',
+    });
+    expect(client.disconnect).toHaveBeenCalled();
+    expect(client.join).not.toHaveBeenCalled();
+  });
+
+  it('broadcasts presence changes and cleans up on disconnect', async () => {
+    documentsService.validateDocumentAccess = jest.fn().mockResolvedValue({
+      accessLevel: 'WRITE',
+      document: { content: { type: 'doc', content: [] } },
+    });
+    const client = {
+      id: 'socket-1',
+      data: {},
+      join: jest.fn(),
+      emit: jest.fn(),
+      disconnect: jest.fn(),
+    };
+
+    await (gateway as any).handleJoinDocument(client, { documentId: 'doc-1', workspaceId: 'ws-1' });
+    await (gateway as any).handlePresenceState(client, { documentId: 'doc-1', status: 'viewing' });
+
+    expect(room.emit).toHaveBeenCalledWith('presence:update', expect.objectContaining({
+      documentId: 'doc-1',
+      collaborators: [expect.objectContaining({ id: 'user-1', status: 'viewing' })],
+    }));
+
+    await (gateway as any).handleDisconnect(client);
+
+    expect(room.emit).toHaveBeenLastCalledWith('presence:update', {
+      documentId: 'doc-1',
+      collaborators: [],
+    });
+    expect((gateway as any).documentPresence.has('doc-1')).toBe(false);
   });
 });
