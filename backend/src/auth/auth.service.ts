@@ -13,6 +13,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto, ResetPasswordDto } from './dto/password-reset.dto';
 import { WorkspaceRole } from '@prisma/client';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class AuthService {
@@ -20,6 +21,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly emailService: EmailService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -154,7 +156,7 @@ export class AuthService {
     });
 
     if (!user) {
-      return { message: 'If email is registered, password reset instructions have been generated' };
+      return { message: 'If email is registered, password reset instructions have been sent.' };
     }
 
     const resetToken = this.jwtService.sign(
@@ -162,9 +164,10 @@ export class AuthService {
       { expiresIn: '1h' },
     );
 
+    await this.emailService.sendPasswordResetEmail(user.email, resetToken);
+
     return {
-      message: 'Password reset token generated successfully',
-      resetToken,
+      message: 'If email is registered, password reset instructions have been sent.',
     };
   }
 

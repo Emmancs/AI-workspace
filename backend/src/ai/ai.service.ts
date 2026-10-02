@@ -28,7 +28,7 @@ export class AiService {
 
   async summarizeDocument(documentId: string, userId: string, workspaceId: string) {
     // We get the document using the existing service which performs RBAC checks
-    const document = await this.documentsService.findOne(documentId, userId);
+    const document = await this.documentsService.findById(documentId, userId);
     
     if (!document) {
       throw new NotFoundException('Document not found or access denied');

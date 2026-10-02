@@ -5,12 +5,23 @@ import { Sidebar } from '@/components/layout/sidebar';
 import { Navbar } from '@/components/layout/navbar';
 import { Bot, Sparkles, X, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/lib/auth-context';
+import { useRouter } from 'next/navigation';
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
+
+  React.useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/login');
+    }
+  }, [user, authLoading, router]);
+
   const [aiDrawerOpen, setAiDrawerOpen] = React.useState(false);
   const [aiInput, setAiInput] = React.useState('');
   const [isAiLoading, setIsAiLoading] = React.useState(false);
@@ -69,6 +80,14 @@ export default function DashboardLayout({
       setIsAiLoading(false);
     }
   };
+
+  if (authLoading) {
+    return <div className="min-h-screen bg-dark-950 flex items-center justify-center text-white">Loading...</div>;
+  }
+
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-dark-950 flex flex-row">

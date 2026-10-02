@@ -27,6 +27,9 @@ import {
   Bar 
 } from 'recharts';
 
+import { useAuth } from '@/lib/auth-context';
+import { apiFetch } from '@/lib/api-client';
+
 const taskData = [
   { day: 'Mon', completed: 12, created: 18 },
   { day: 'Tue', completed: 19, created: 22 },
@@ -46,13 +49,41 @@ const aiUsageData = [
 ];
 
 export default function DashboardPage() {
+  const { user, activeWorkspace } = useAuth();
+  const [stats, setStats] = React.useState({ projects: 0, tasks: 0, documents: 0, aiRequests: 0, recentDocs: [] });
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    async function loadStats() {
+      if (!activeWorkspace) return;
+      try {
+        const [wsData, docs] = await Promise.all([
+          apiFetch(`/workspaces/${activeWorkspace.id}`),
+          apiFetch(`/documents/workspace/${activeWorkspace.id}`)
+        ]);
+        setStats({
+          projects: wsData._count?.projects || 0,
+          tasks: wsData._count?.tasks || 0,
+          documents: wsData._count?.documents || 0,
+          aiRequests: wsData._count?.aiUsageLogs || 0,
+          recentDocs: Array.isArray(docs) ? docs.slice(0, 5) : [],
+        });
+      } catch (e) {
+        console.error('Failed to load stats', e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadStats();
+  }, [activeWorkspace]);
+
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
       {/* Header Greeting */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl lg:text-3xl font-extrabold text-white font-outfit tracking-tight">
-            Good morning, Emmanuel 👋
+            Good morning, {user?.name || 'User'} 👋
           </h1>
           <p className="text-slate-400 text-xs lg:text-sm mt-1">
             Here is your workspace overview and AI-driven team activity for today.
@@ -81,12 +112,8 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-white">8</span>
-            <span className="text-xs text-emerald-400 font-medium flex items-center">
-              <TrendingUp className="w-3 h-3 mr-0.5" /> +2 this week
-            </span>
+            <span className="text-2xl font-bold text-white">{loading ? '...' : stats.projects}</span>
           </div>
-          <span className="text-[11px] text-slate-500 mt-1 block">5 Active • 3 Planning</span>
         </Card>
 
         <Card>
@@ -97,10 +124,8 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-white">34</span>
-            <span className="text-xs text-emerald-400 font-medium">82% On Schedule</span>
+            <span className="text-2xl font-bold text-white">{loading ? '...' : stats.tasks}</span>
           </div>
-          <span className="text-[11px] text-slate-500 mt-1 block">126 Completed total</span>
         </Card>
 
         <Card>
@@ -111,10 +136,8 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-white">72</span>
-            <span className="text-xs text-purple-300 font-medium">Real-time sync</span>
+            <span className="text-2xl font-bold text-white">{loading ? '...' : stats.documents}</span>
           </div>
-          <span className="text-[11px] text-slate-500 mt-1 block">14 Updated today</span>
         </Card>
 
         <Card>
@@ -125,10 +148,8 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-brand-300">1,284</span>
-            <span className="text-xs text-brand-400 font-medium">99.8% Context Match</span>
+            <span className="text-2xl font-bold text-brand-300">{loading ? '...' : stats.aiRequests}</span>
           </div>
-          <span className="text-[11px] text-slate-500 mt-1 block">RAG isolated per workspace</span>
         </Card>
       </div>
 
@@ -197,44 +218,27 @@ export default function DashboardPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Recent Workspace Activity</CardTitle>
-            <Button variant="ghost" size="sm" className="text-xs">View Audit Log</Button>
+            <CardTitle>Recent Documents</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div className="flex items-start gap-3 text-xs border-b border-slate-800/60 pb-3">
-              <div className="w-7 h-7 rounded-full bg-indigo-600/30 text-indigo-300 font-bold flex items-center justify-center shrink-0">
-                E
-              </div>
-              <div className="flex-1">
-                <span className="font-semibold text-white">Emmanuel</span> created project <span className="text-brand-300 font-medium font-mono">FlowAI E-Commerce Core</span>
-                <span className="text-slate-500 text-[10px] block mt-0.5">10 minutes ago</span>
-              </div>
-              <Badge variant="brand">Project</Badge>
-            </div>
-
-            <div className="flex items-start gap-3 text-xs border-b border-slate-800/60 pb-3">
-              <div className="w-7 h-7 rounded-full bg-purple-600/30 text-purple-300 font-bold flex items-center justify-center shrink-0">
-                A
-              </div>
-              <div className="flex-1">
-                <span className="font-semibold text-white">Alex</span> edited document <span className="text-purple-300 font-medium font-mono">JWT & OAuth Architecture Spec</span>
-                <span className="text-slate-500 text-[10px] block mt-0.5">32 minutes ago</span>
-              </div>
-              <Badge variant="purple">Document</Badge>
-            </div>
-
-            <div className="flex items-start gap-3 text-xs">
-              <div className="w-7 h-7 rounded-full bg-emerald-600/30 text-emerald-300 font-bold flex items-center justify-center shrink-0">
-                P
-              </div>
-              <div className="flex-1">
-                <span className="font-semibold text-white">Priya</span> completed task <span className="text-emerald-300 font-medium font-mono">Setup PostgreSQL pgvector extension</span>
-                <span className="text-slate-500 text-[10px] block mt-0.5">1 hour ago</span>
-              </div>
-              <Badge variant="success">Task</Badge>
-            </div>
+            {stats.recentDocs.length === 0 ? (
+              <p className="text-xs text-slate-500">No documents found.</p>
+            ) : (
+              stats.recentDocs.map((doc: any) => (
+                <div key={doc.id} className="flex items-start gap-3 text-xs border-b border-slate-800/60 pb-3 last:border-0 last:pb-0">
+                  <div className="w-7 h-7 rounded-full bg-purple-600/30 text-purple-300 font-bold flex items-center justify-center shrink-0">
+                    {doc.createdBy?.name?.[0]?.toUpperCase() || 'U'}
+                  </div>
+                  <div className="flex-1">
+                    <span className="font-semibold text-white">{doc.createdBy?.name || 'User'}</span> edited document <span className="text-purple-300 font-medium font-mono">{doc.title}</span>
+                    <span className="text-slate-500 text-[10px] block mt-0.5">{new Date(doc.updatedAt).toLocaleString()}</span>
+                  </div>
+                  <Badge variant="purple">Document</Badge>
+                </div>
+              ))
+            )}
           </div>
         </CardContent>
       </Card>

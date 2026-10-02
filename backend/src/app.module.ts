@@ -17,6 +17,8 @@ import { AdminModule } from './admin/admin.module';
 import { EmbeddingsModule } from './embeddings/embeddings.module';
 import { CollaborationModule } from './collaboration/collaboration.module';
 
+import { EmailModule } from './email/email.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -38,6 +40,7 @@ import { CollaborationModule } from './collaboration/collaboration.module';
     AdminModule,
     EmbeddingsModule,
     CollaborationModule,
+    EmailModule,
   ],
 })
 export class AppModule {}
