@@ -66,6 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(data.accessToken);
 
       localStorage.setItem('flowai_access_token', data.accessToken);
+      document.cookie = 'flowai_authenticated=1; Path=/; SameSite=Lax';
       localStorage.setItem('flowai_refresh_token', data.refreshToken);
       localStorage.setItem('flowai_user', JSON.stringify(data.user));
       if (data.activeWorkspace) {
@@ -88,6 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(response.accessToken);
 
       localStorage.setItem('flowai_access_token', response.accessToken);
+      document.cookie = 'flowai_authenticated=1; Path=/; SameSite=Lax';
       localStorage.setItem('flowai_refresh_token', response.refreshToken);
       localStorage.setItem('flowai_user', JSON.stringify(response.user));
       if (response.workspace) {
@@ -109,6 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem('flowai_refresh_token');
       localStorage.removeItem('flowai_user');
       localStorage.removeItem('flowai_active_workspace');
+      document.cookie = 'flowai_authenticated=; Path=/; Max-Age=0; SameSite=Lax';
     }
   };
 

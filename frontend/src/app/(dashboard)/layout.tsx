@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Navbar } from '@/components/layout/navbar';
-import { Bot, Sparkles, X, Send } from 'lucide-react';
+import { Bot, X, Send, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
@@ -23,6 +23,10 @@ export default function DashboardLayout({
   }, [user, authLoading, router]);
 
   const [aiDrawerOpen, setAiDrawerOpen] = React.useState(false);
+  const [searchOpen, setSearchOpen] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [searchResults, setSearchResults] = React.useState<any[]>([]);
+  const [searchLoading, setSearchLoading] = React.useState(false);
   const [aiInput, setAiInput] = React.useState('');
   const [isAiLoading, setIsAiLoading] = React.useState(false);
   const [conversationId, setConversationId] = React.useState<string | undefined>(undefined);
@@ -81,6 +85,27 @@ export default function DashboardLayout({
     }
   };
 
+  React.useEffect(() => {
+    if (!searchOpen || !activeWorkspace?.id || searchQuery.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    const timer = window.setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const data = await import('@/lib/api-client').then(({ apiFetch }) =>
+          apiFetch<{ results: any[] }>(`/search?workspaceId=${encodeURIComponent(activeWorkspace.id)}&q=${encodeURIComponent(searchQuery)}`),
+        );
+        setSearchResults(data.results);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchOpen, searchQuery, activeWorkspace?.id]);
+
   if (authLoading) {
     return <div className="min-h-screen bg-dark-950 flex items-center justify-center text-white">Loading...</div>;
   }
@@ -100,13 +125,36 @@ export default function DashboardLayout({
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         <Navbar 
-          onOpenSearch={() => setAiDrawerOpen(true)} 
+          onOpenSearch={() => setSearchOpen(true)} 
         />
         
         <main className="flex-1 p-6 lg:p-8 overflow-y-auto">
           {children}
         </main>
       </div>
+
+      {searchOpen && (
+        <div className="fixed inset-0 z-40 bg-black/60 p-4 sm:p-16" onClick={() => setSearchOpen(false)}>
+          <div className="mx-auto max-w-2xl rounded-2xl border border-slate-700 bg-dark-900 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center gap-3 border-b border-slate-800 p-4">
+              <Search className="h-5 w-5 text-slate-400" />
+              <input autoFocus value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search documents, projects, tasks, and members" className="flex-1 bg-transparent text-white outline-none" />
+              <button onClick={() => setSearchOpen(false)} className="text-xs text-slate-400">Esc</button>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto p-2">
+              {searchLoading && <p className="p-4 text-sm text-slate-400">Searching...</p>}
+              {!searchLoading && searchQuery.trim().length >= 2 && searchResults.length === 0 && <p className="p-4 text-sm text-slate-400">No matching results.</p>}
+              {searchResults.map((result) => (
+                <button key={`${result.type}-${result.id}`} onClick={() => { setSearchOpen(false); router.push(result.href); }} className="w-full rounded-lg p-3 text-left hover:bg-slate-800">
+                  <div className="text-xs uppercase text-brand-300">{result.type}</div>
+                  <div className="text-sm text-white">{result.title}</div>
+                  {result.subtitle && <div className="text-xs text-slate-400">{result.subtitle}</div>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Slide-over Workspace AI Assistant Drawer */}
       {aiDrawerOpen && (

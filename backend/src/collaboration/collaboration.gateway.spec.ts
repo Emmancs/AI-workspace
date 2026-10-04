@@ -159,6 +159,7 @@ describe('CollaborationGateway.handleDocumentUpdate', () => {
       { type: 'doc', content: [] },
       '',
       'user-write',
+      expect.any(String),
     );
     expect(emit).toHaveBeenCalledWith('document:remote-update', expect.objectContaining({
       documentId: 'doc-2',

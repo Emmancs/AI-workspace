@@ -61,7 +61,13 @@ export class CommentsController {
     @Body() dto: CreateCommentDto,
     @CurrentUser('id') userId: string,
   ) {
-    return this.prisma.comment.create({
+    const document = await this.prisma.document.findUnique({
+      where: { id: dto.documentId },
+      select: { workspaceId: true, title: true },
+    });
+    if (!document) throw new Error('Document not found');
+
+    const comment = await this.prisma.comment.create({
       data: {
         documentId: dto.documentId,
         userId,
@@ -73,6 +79,35 @@ export class CommentsController {
         replies: true,
       },
     });
+
+    await this.prisma.$transaction([
+      this.prisma.activityLog.create({
+        data: {
+          workspaceId: document.workspaceId,
+          actorId: userId,
+          action: 'created',
+          entityType: 'comment',
+          entityId: comment.id,
+          metadata: { documentId: dto.documentId },
+        },
+      }),
+      ...((dto.mentions || [])
+        .filter((mentionedUserId) => mentionedUserId !== userId)
+        .map((mentionedUserId) =>
+          this.prisma.notification.create({
+            data: {
+              userId: mentionedUserId,
+              type: 'MENTION',
+              title: 'You were mentioned in a comment',
+              content: `You were mentioned in "${document.title}".`,
+              link: `/documents/${dto.documentId}`,
+              metadata: { commentId: comment.id, documentId: dto.documentId },
+            },
+          }),
+        )),
+    ]);
+
+    return comment;
   }
 
   @Patch(':commentId')
@@ -130,7 +165,13 @@ export class CommentsController {
     @Body() dto: CreateCommentReplyDto,
     @CurrentUser('id') userId: string,
   ) {
-    return this.prisma.commentReply.create({
+    const comment = await this.prisma.comment.findUnique({
+      where: { id: commentId },
+      include: { document: { select: { workspaceId: true, title: true } } },
+    });
+    if (!comment) throw new Error('Comment not found');
+
+    const reply = await this.prisma.commentReply.create({
       data: {
         commentId,
         userId,
@@ -141,6 +182,35 @@ export class CommentsController {
         user: { select: { id: true, name: true, email: true, avatarUrl: true } },
       },
     });
+
+    const recipients = new Set([comment.userId, ...(dto.mentions || [])]);
+    recipients.delete(userId);
+    await this.prisma.$transaction([
+      this.prisma.activityLog.create({
+        data: {
+          workspaceId: comment.document.workspaceId,
+          actorId: userId,
+          action: 'replied',
+          entityType: 'comment',
+          entityId: commentId,
+          metadata: { replyId: reply.id, documentId: comment.documentId },
+        },
+      }),
+      ...Array.from(recipients).map((recipientId) =>
+        this.prisma.notification.create({
+          data: {
+            userId: recipientId,
+            type: 'DISCUSSION_REPLY',
+            title: 'New comment reply',
+            content: `There is a new reply in "${comment.document.title}".`,
+            link: `/documents/${comment.documentId}`,
+            metadata: { commentId, replyId: reply.id },
+          },
+        }),
+      ),
+    ]);
+
+    return reply;
   }
 
   @Delete('reply/:replyId')

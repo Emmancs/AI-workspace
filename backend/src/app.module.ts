@@ -16,6 +16,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { AdminModule } from './admin/admin.module';
 import { EmbeddingsModule } from './embeddings/embeddings.module';
 import { CollaborationModule } from './collaboration/collaboration.module';
+import { SearchModule } from './search/search.module';
 
 import { EmailModule } from './email/email.module';
 
@@ -40,6 +41,7 @@ import { EmailModule } from './email/email.module';
     AdminModule,
     EmbeddingsModule,
     CollaborationModule,
+    SearchModule,
     EmailModule,
   ],
 })

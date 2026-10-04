@@ -84,6 +84,7 @@ model User {
 
   accounts            Account[]
   sessions            Session[]
+  passwordResetTokens PasswordResetToken[]
   workspaceMembers    WorkspaceMember[]
   invitationsSent     WorkspaceInvitation[] @relation("InvitationSender")
   projectsOwned       Project[]             @relation("ProjectOwner")
@@ -133,6 +134,20 @@ model Session {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Workspace {
@@ -240,6 +255,7 @@ model Document {
   title       String
   content     Json?    @default("{}")
   plainText   String?  @db.Text
+  collaborationState String? @db.Text
   isArchived  Boolean  @default(false)
   createdById String
   createdAt   DateTime @default(now())

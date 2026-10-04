@@ -8,6 +8,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
+import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -159,10 +160,16 @@ export class AuthService {
       return { message: 'If email is registered, password reset instructions have been sent.' };
     }
 
-    const resetToken = this.jwtService.sign(
-      { sub: user.id, purpose: 'password_reset' },
-      { expiresIn: '1h' },
-    );
+    await this.prisma.passwordResetToken.deleteMany({ where: { userId: user.id, usedAt: null } });
+    const resetToken = randomBytes(32).toString('hex');
+    const tokenHash = createHash('sha256').update(resetToken).digest('hex');
+    await this.prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        tokenHash,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      },
+    });
 
     await this.emailService.sendPasswordResetEmail(user.email, resetToken);
 
@@ -172,24 +179,19 @@ export class AuthService {
   }
 
   async resetPassword(dto: ResetPasswordDto) {
-    try {
-      const payload = this.jwtService.verify(dto.token);
-      if (payload.purpose !== 'password_reset') {
-        throw new BadRequestException('Invalid password reset token');
-      }
-
-      const salt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash(dto.newPassword, salt);
-
-      await this.prisma.user.update({
-        where: { id: payload.sub },
-        data: { passwordHash },
-      });
-
-      return { message: 'Password updated successfully' };
-    } catch (err) {
+    const tokenHash = createHash('sha256').update(dto.token).digest('hex');
+    const resetToken = await this.prisma.passwordResetToken.findUnique({ where: { tokenHash } });
+    if (!resetToken || resetToken.usedAt || resetToken.expiresAt < new Date()) {
       throw new BadRequestException('Invalid or expired password reset token');
     }
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(dto.newPassword, salt);
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: resetToken.userId }, data: { passwordHash } }),
+      this.prisma.passwordResetToken.update({ where: { id: resetToken.id }, data: { usedAt: new Date() } }),
+      this.prisma.session.deleteMany({ where: { userId: resetToken.userId } }),
+    ]);
+    return { message: 'Password updated successfully' };
   }
 
   async validateGoogleUser(googleProfile: { email: string; name: string; avatarUrl?: string }) {

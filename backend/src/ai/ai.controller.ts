@@ -40,7 +40,7 @@ export class AiController {
     if (!workspaceId) {
       throw new BadRequestException('x-workspace-id header is required');
     }
-    return this.aiService.generateContent(dto.prompt, userId, workspaceId);
+    return this.aiService.generateContent(dto.prompt, userId, workspaceId, dto.documentId, dto.operation);
   }
 
   @Post('chat')
@@ -53,7 +53,7 @@ export class AiController {
     if (!workspaceId) {
       throw new BadRequestException('x-workspace-id header is required');
     }
-    return this.aiService.chat(dto.message, userId, workspaceId, dto.conversationId);
+    return this.aiService.chat(dto.message, userId, workspaceId, dto.conversationId, dto.documentId);
   }
 
   @Get('conversations')

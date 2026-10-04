@@ -1,5 +1,8 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { EmbeddingsService } from '../embeddings/embeddings.service';
+import { SourceType } from '@prisma/client';
 
 export class CreateDocumentDto {
   workspaceId: string;
@@ -23,7 +26,11 @@ export class ShareDocumentDto {
 
 @Injectable()
 export class DocumentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications?: NotificationsService,
+    private readonly embeddings?: EmbeddingsService,
+  ) {}
 
   async findByWorkspace(workspaceId: string, userId: string, filters?: { search?: string; projectId?: string }) {
     await this.assertWorkspaceMember(workspaceId, userId);
@@ -71,7 +78,7 @@ export class DocumentsService {
 
   async create(dto: CreateDocumentDto, userId: string) {
     await this.assertWorkspaceMember(dto.workspaceId, userId);
-    return this.prisma.document.create({
+    const document = await this.prisma.document.create({
       data: {
         workspaceId: dto.workspaceId,
         projectId: dto.projectId,
@@ -84,6 +91,18 @@ export class DocumentsService {
         createdBy: { select: { id: true, name: true, email: true, avatarUrl: true } },
       },
     });
+    await this.prisma.activityLog.create({
+      data: {
+        workspaceId: dto.workspaceId,
+        actorId: userId,
+        action: 'created',
+        entityType: 'document',
+        entityId: document.id,
+        metadata: { title: document.title },
+      },
+    });
+    this.queueEmbedding(document.id, document.workspaceId, document.title, document.plainText);
+    return document;
   }
 
   async update(documentId: string, dto: UpdateDocumentDto, userId: string) {
@@ -114,14 +133,46 @@ export class DocumentsService {
       });
     }
 
+    await this.prisma.activityLog.create({
+      data: {
+        workspaceId: updated.workspaceId,
+        actorId: userId,
+        action: 'updated',
+        entityType: 'document',
+        entityId: documentId,
+        metadata: { title: updated.title },
+      },
+    });
+    this.queueEmbedding(updated.id, updated.workspaceId, updated.title, updated.plainText);
+
     return updated;
   }
 
-  async persistCollaborationContent(documentId: string, content: any, plainText: string | undefined, userId: string) {
+  private queueEmbedding(documentId: string, workspaceId: string, title: string, plainText?: string | null) {
+    if (!this.embeddings || !plainText?.trim()) return;
+    void this.embeddings.updateEmbeddings({
+      sourceType: SourceType.DOCUMENT,
+      sourceId: documentId,
+      workspaceId,
+      content: `${title}\n\n${plainText}`,
+      metadata: { title },
+    }).catch((error) => {
+      // Embeddings are supplementary; a provider outage must not block editing.
+      console.error(`Embedding update failed for document ${documentId}`, error);
+    });
+  }
+
+  async persistCollaborationContent(
+    documentId: string,
+    content: any,
+    plainText: string | undefined,
+    userId: string,
+    collaborationState?: string,
+  ) {
     await this.assertDocumentAccess(documentId, userId, 'WRITE');
     return this.prisma.document.update({
       where: { id: documentId },
-      data: { content, plainText },
+      data: { content, plainText, ...(collaborationState ? { collaborationState } : {}) },
     });
   }
 
@@ -196,7 +247,7 @@ export class DocumentsService {
     if (!doc) throw new NotFoundException('Document not found');
 
     // Create or update share
-    return this.prisma.documentShare.upsert({
+    const share = await this.prisma.documentShare.upsert({
       where: { documentId_userId: { documentId, userId: dto.userId } },
       update: { permissionLevel: dto.permissionLevel as any },
       create: {
@@ -210,6 +261,23 @@ export class DocumentsService {
         sharedBy: { select: { id: true, name: true } },
       },
     });
+    await this.notifications?.create(dto.userId, {
+      type: 'DOCUMENT_UPDATED',
+      title: 'A document was shared with you',
+      content: `You now have ${dto.permissionLevel.toLowerCase()} access to "${doc.title}".`,
+      link: `/documents/${documentId}`,
+    }, { documentId, permissionLevel: dto.permissionLevel });
+    await this.prisma.activityLog.create({
+      data: {
+        workspaceId: doc.workspaceId,
+        actorId: sharedById,
+        action: 'shared',
+        entityType: 'document',
+        entityId: documentId,
+        metadata: { userId: dto.userId, permissionLevel: dto.permissionLevel },
+      },
+    });
+    return share;
   }
 
   async getSharedWithMe(userId: string, workspaceId: string) {
@@ -279,6 +347,7 @@ export class DocumentsService {
         workspaceId: true,
         createdById: true,
         content: true,
+        collaborationState: true,
       },
     });
 

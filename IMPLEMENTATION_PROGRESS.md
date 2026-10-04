@@ -38,21 +38,31 @@ The repository is an existing Next.js + NestJS + PostgreSQL/Prisma application. 
 - Members page no longer falls back to mock members
 - Invitation UI no longer displays invitation tokens
 - Workspace settings load and save real workspace profile and AI settings
+- Notification list, unread count, mark-read, and mark-all-read APIs
+- Database-backed workspace analytics API and dashboard chart integration
+- Project/task workspace authorization and activity-log creation for project/task mutations
+- Workspace project listing now uses the real project API route
+- Optional AI document context and pgvector retrieval in chat/content generation
+- AI writing operations for rewrite, improve, and grammar correction
+- Persisted Yjs collaboration snapshots on documents
+- Next.js protected-route middleware backed by an authentication presence cookie
+- Projects page with real project listing and creation
+- Tasks page with real task listing, creation, and status updates
+- Notifications page with real listing and read-state actions
 
 ## In progress / needs verification
 
 - Frontend AI drawer end-to-end behavior, including retry and conversation reload UX
 - Frontend lint cleanup for existing warnings
-- Real dashboard and workspace data replacing remaining hardcoded UI values
-- Route protection verification for all protected pages
+- Notification dropdown and event producers for every notification type
+- Activity logging for documents, sharing, comments, invitations, and AI actions
 - Email provider abstraction and invitation/password-reset delivery
-- Durable Yjs state persistence across backend restarts
-- Project/task MVP UI and API integration
-- Notification list/read-state UI and event wiring
-- Real analytics based on PostgreSQL data
-- Embedding generation, vector persistence, semantic retrieval, and grounded AI responses
+- Project/task edit/delete/assignment/labels UI
+- AI drawer conversation reload/retry UI and writing-tool controls
+- Automatic embedding generation on document create/update
+- RAG search endpoint authorization and production provider configuration
 - Full security review, including rate limiting and prompt-injection defenses
-- Database migration status in a configured PostgreSQL environment
+- Applying the persisted-Yjs migration to a configured PostgreSQL environment
 
 ## Recent correctness fixes
 
@@ -75,6 +85,34 @@ npm --prefix frontend run build       # passed
 ```
 
 The frontend production build emitted existing warnings for `<img>`, hook dependency arrays, and custom fonts. No build or type errors remain.
+
+## Latest implementation batch
+
+- Backend analytics/notifications typecheck and build passed.
+- Backend regression tests passed: 1 suite, 8 tests.
+- Frontend dashboard analytics typecheck passed.
+- Frontend production build passed after the real-data and route changes.
+- Prisma client regenerated after adding `Document.collaborationState`.
+- Added migration: `backend/prisma/migrations/20261004170000_add_collaboration_state/migration.sql`.
+- Backend validation after the latest batch passed: typecheck, build, lint, and 8/8 tests.
+- Frontend validation after the latest batch passed: typecheck and production build.
+- Comment creation and replies now write activity records and create mention/reply notifications.
+
+## Files and APIs added or changed
+
+- Added `/notifications`, `/notifications/unread-count`, `/notifications/:id/read`, and `/notifications/read-all`.
+- Added `/analytics/workspace/:workspaceId`.
+- Added real project, task, and notification frontend pages.
+- Extended AI generation/chat requests with optional document context and writing operations.
+- Added persisted `Document.collaborationState` and Yjs snapshot restoration.
+- Added `Document.collaborationState` migration.
+- Added authentication presence-cookie synchronization for middleware route protection.
+
+## Environment variables
+
+- `GEMINI_API_KEY` is required for Gemini operations.
+- `OPENAI_API_KEY` is required for the existing 1536-dimension embedding provider and RAG retrieval.
+- `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, and Redis/SMTP variables remain environment-only configuration.
 
 ## Remaining-work rule
 

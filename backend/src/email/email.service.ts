@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import { ServiceUnavailableException } from '@nestjs/common';
 
 @Injectable()
 export class EmailService {
@@ -9,11 +10,11 @@ export class EmailService {
 
   constructor(private configService: ConfigService) {
     this.transporter = nodemailer.createTransport({
-      host: this.configService.get<string>('SMTP_HOST') || 'smtp.ethereal.email',
+      host: this.configService.get<string>('SMTP_HOST'),
       port: this.configService.get<number>('SMTP_PORT') || 587,
       auth: {
-        user: this.configService.get<string>('SMTP_USER') || 'test-user',
-        pass: this.configService.get<string>('SMTP_PASS') || 'test-pass',
+        user: this.configService.get<string>('SMTP_USER'),
+        pass: this.configService.get<string>('SMTP_PASS'),
       },
     });
   }
@@ -23,6 +24,7 @@ export class EmailService {
     const resetLink = `${frontendUrl}/reset-password?token=${token}`;
 
     try {
+      this.assertConfigured();
       await this.transporter.sendMail({
         from: '"FlowAI Workspace" <noreply@flowai.com>',
         to: email,
@@ -37,14 +39,16 @@ export class EmailService {
       this.logger.log(`Password reset email sent to ${email}`);
     } catch (error) {
       this.logger.error(`Failed to send password reset email to ${email}`, error);
+      throw error;
     }
   }
 
   async sendWorkspaceInvitation(email: string, workspaceName: string, role: string, token: string) {
     const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
-    const invitationLink = `${frontendUrl}/invitations?token=${token}`;
+    const invitationLink = `${frontendUrl}/invitations/${token}`;
 
     try {
+      this.assertConfigured();
       await this.transporter.sendMail({
         from: '"FlowAI Workspace" <noreply@flowai.com>',
         to: email,
@@ -59,6 +63,15 @@ export class EmailService {
       this.logger.log(`Workspace invitation sent to ${email}`);
     } catch (error) {
       this.logger.error(`Failed to send workspace invitation to ${email}`, error);
+      throw error;
+    }
+  }
+
+  private assertConfigured() {
+    if (!this.configService.get<string>('SMTP_HOST') ||
+        !this.configService.get<string>('SMTP_USER') ||
+        !this.configService.get<string>('SMTP_PASS')) {
+      throw new ServiceUnavailableException('SMTP email service is not configured');
     }
   }
 }

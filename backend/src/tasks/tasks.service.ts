@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TaskStatus, TaskPriority } from '@prisma/client';
+import { NotificationsService } from '../notifications/notifications.service';
 
 export class CreateTaskDto {
   workspaceId: string;
@@ -24,7 +25,10 @@ export class UpdateTaskDto {
 
 @Injectable()
 export class TasksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   private async assertMember(workspaceId: string, userId: string) {
     const member = await this.prisma.workspaceMember.findUnique({
@@ -96,6 +100,14 @@ export class TasksService {
         metadata: { title: task.title },
       },
     });
+    if (task.assigneeId && task.assigneeId !== userId) {
+      await this.notifications.create(task.assigneeId, {
+        type: 'TASK_ASSIGNED',
+        title: 'You were assigned a task',
+        content: task.title,
+        link: `/workspaces/${task.workspaceId}/tasks?taskId=${task.id}`,
+      }, { taskId: task.id, projectId: task.projectId });
+    }
     return task;
   }
 
@@ -128,6 +140,14 @@ export class TasksService {
         metadata: { title: updated.title, status: updated.status },
       },
     });
+    if (updated.assigneeId && updated.assigneeId !== existing.assigneeId && updated.assigneeId !== userId) {
+      await this.notifications.create(updated.assigneeId, {
+        type: 'TASK_ASSIGNED',
+        title: 'You were assigned a task',
+        content: updated.title,
+        link: `/workspaces/${updated.workspaceId}/tasks?taskId=${updated.id}`,
+      }, { taskId: updated.id, projectId: updated.projectId });
+    }
     return updated;
   }
 

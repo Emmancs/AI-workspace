@@ -17,6 +17,15 @@ export class GenerateContentDto {
   @IsNotEmpty()
   @MaxLength(10000)
   prompt: string;
+
+  @IsOptional()
+  @IsString()
+  documentId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  operation?: string;
 }
 
 export class ChatDto {
@@ -28,4 +37,8 @@ export class ChatDto {
   @IsString()
   @IsOptional()
   conversationId?: string;
+
+  @IsOptional()
+  @IsString()
+  documentId?: string;
 }

@@ -114,7 +114,7 @@ export class CollaborationGateway implements OnGatewayConnection, OnGatewayDisco
       presenceMap.set(client.id, presence);
       this.documentPresence.set(documentId, presenceMap);
 
-      const state = this.getOrCreateDocumentState(documentId);
+      const state = this.getOrCreateDocumentState(documentId, access.document.collaborationState);
       const stateUpdate = Array.from(Y.encodeStateAsUpdate(state));
 
       client.emit('document:initial', {
@@ -199,7 +199,13 @@ export class CollaborationGateway implements OnGatewayConnection, OnGatewayDisco
       Y.applyUpdate(doc, update, client.id);
 
       if (payload.content) {
-        await this.documentsService.persistCollaborationContent(documentId, payload.content, payload.plainText, user.id);
+        await this.documentsService.persistCollaborationContent(
+          documentId,
+          payload.content,
+          payload.plainText,
+          user.id,
+          Buffer.from(Y.encodeStateAsUpdate(doc)).toString('base64'),
+        );
       }
 
       this.server.to(room).emit('document:remote-update', {
@@ -251,11 +257,18 @@ export class CollaborationGateway implements OnGatewayConnection, OnGatewayDisco
     return `document:${documentId}`;
   }
 
-  private getOrCreateDocumentState(documentId: string) {
+  private getOrCreateDocumentState(documentId: string, persistedState?: string | null) {
     const existing = this.documentStates.get(documentId);
     if (existing) return existing;
 
     const created = new Y.Doc();
+    if (persistedState) {
+      try {
+        Y.applyUpdate(created, Uint8Array.from(Buffer.from(persistedState, 'base64')));
+      } catch (error) {
+        this.logger.warn(`Unable to restore Yjs state for document ${documentId}`);
+      }
+    }
     this.documentStates.set(documentId, created);
     return created;
   }

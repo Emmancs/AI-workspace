@@ -11,10 +11,16 @@ import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
 import { WorkspaceRole, InvitationStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import { NotificationsService } from '../notifications/notifications.service';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class WorkspacesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+    private readonly email: EmailService,
+  ) {}
 
   async getUserWorkspaces(userId: string) {
     const memberships = await this.prisma.workspaceMember.findMany({
@@ -221,7 +227,7 @@ export class WorkspacesService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    return this.prisma.workspaceInvitation.create({
+    const invitation = await this.prisma.workspaceInvitation.create({
       data: {
         workspaceId,
         email: dto.email.toLowerCase(),
@@ -235,6 +241,18 @@ export class WorkspacesService {
         invitedBy: { select: { id: true, name: true, email: true } },
       },
     });
+    const workspace = invitation.workspace;
+    const invitedUser = await this.prisma.user.findUnique({ where: { email: invitation.email }, select: { id: true } });
+    if (invitedUser) {
+      await this.notifications.create(invitedUser.id, {
+        type: 'WORKSPACE_INVITATION',
+        title: `Invitation to join ${workspace.name}`,
+        content: `You have been invited to join ${workspace.name}.`,
+        link: `/invitations/${invitation.token}`,
+      });
+    }
+    await this.email.sendWorkspaceInvitation(invitation.email, workspace.name, invitation.role, invitation.token);
+    return invitation;
   }
 
   async getInvitationByToken(token: string) {
