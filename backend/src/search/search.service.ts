@@ -3,10 +3,18 @@ import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class SearchService {
+  private readonly requests = new Map<string, { startedAt: number; count: number }>();
   constructor(private readonly prisma: PrismaService) {}
 
   async search(userId: string, workspaceId: string, query: string) {
     const term = query.trim();
+    const now = Date.now();
+    const key = `${userId}:${workspaceId}`;
+    const current = this.requests.get(key);
+    if (!current || now - current.startedAt >= 60_000) this.requests.set(key, { startedAt: now, count: 1 });
+    else if (current.count >= 60) throw new ForbiddenException('Search rate limit exceeded');
+    else current.count += 1;
+    if (term.length > 200) throw new ForbiddenException('Search query is too long');
     if (term.length < 2) return { query: term, results: [] };
 
     const membership = await this.prisma.workspaceMember.findUnique({

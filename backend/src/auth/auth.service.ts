@@ -18,12 +18,26 @@ import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class AuthService {
+  private readonly attempts = new Map<string, { startedAt: number; count: number }>();
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly emailService: EmailService,
   ) {}
+
+  private enforceRateLimit(key: string, max: number, windowMs = 60_000) {
+    const now = Date.now();
+    const current = this.attempts.get(key);
+    if (!current || now - current.startedAt >= windowMs) {
+      this.attempts.set(key, { startedAt: now, count: 1 });
+      return;
+    }
+    if (current.count >= max) {
+      throw new UnauthorizedException('Too many requests. Please try again shortly.');
+    }
+    current.count += 1;
+  }
 
   async register(dto: RegisterDto) {
     const existingUser = await this.prisma.user.findUnique({
@@ -83,6 +97,7 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
+    this.enforceRateLimit(`login:${dto.email.toLowerCase()}`, 10);
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase() },
     });
@@ -152,6 +167,7 @@ export class AuthService {
   }
 
   async forgotPassword(dto: ForgotPasswordDto) {
+    this.enforceRateLimit(`forgot:${dto.email.toLowerCase()}`, 5);
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase() },
     });

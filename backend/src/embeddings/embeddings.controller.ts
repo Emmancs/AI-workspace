@@ -29,7 +29,7 @@ class SearchEmbeddingsDto {
   sourceType?: SourceType;
 }
 
-@Controller('api/embeddings')
+@Controller('embeddings')
 @UseGuards(JwtAuthGuard)
 @UseInterceptors(ClassSerializerInterceptor)
 export class EmbeddingsController {
@@ -40,6 +40,7 @@ export class EmbeddingsController {
     @CurrentUser() user: any,
     @Body() dto: CreateEmbeddingDto,
   ) {
+    await this.embeddingsService.assertSourceAccess(dto.sourceType, dto.sourceId, dto.workspaceId, user.id, true);
     return await this.embeddingsService.createEmbedding({
       content: dto.content,
       sourceType: dto.sourceType,
@@ -57,6 +58,7 @@ export class EmbeddingsController {
     @CurrentUser() user: any,
     @Body() dto: CreateEmbeddingDto,
   ) {
+    await this.embeddingsService.assertSourceAccess(dto.sourceType, dto.sourceId, dto.workspaceId, user.id, true);
     return await this.embeddingsService.updateEmbeddings({
       content: dto.content,
       sourceType: dto.sourceType,
@@ -75,9 +77,11 @@ export class EmbeddingsController {
     @Body() dto: SearchEmbeddingsDto,
     @Query('workspaceId') workspaceId: string,
   ) {
+    await this.embeddingsService.assertWorkspaceAccess(workspaceId, user.id);
     return await this.embeddingsService.search(
       dto.query,
       workspaceId,
+      user.id,
       dto.limit || 10,
       dto.sourceType,
     );
@@ -85,32 +89,42 @@ export class EmbeddingsController {
 
   @Get(':sourceType/:sourceId')
   async getBySource(
+    @CurrentUser() user: any,
     @Param('sourceType') sourceType: SourceType,
     @Param('sourceId') sourceId: string,
   ) {
+    const source = await this.embeddingsService.getEmbeddingSource(sourceType, sourceId);
+    await this.embeddingsService.assertSourceAccess(sourceType, sourceId, source.workspaceId, user.id);
     return await this.embeddingsService.getEmbeddingsBySource(sourceType, sourceId);
   }
 
   @Delete(':sourceType/:sourceId')
   async deleteEmbeddings(
+    @CurrentUser() user: any,
     @Param('sourceType') sourceType: SourceType,
     @Param('sourceId') sourceId: string,
   ) {
+    const source = await this.embeddingsService.getEmbeddingSource(sourceType, sourceId);
+    await this.embeddingsService.assertSourceAccess(sourceType, sourceId, source.workspaceId, user.id, true);
     const count = await this.embeddingsService.deleteEmbeddings(sourceType, sourceId);
     return { deleted: count };
   }
 
   @Get('stats/:workspaceId')
   async getWorkspaceStats(
+    @CurrentUser() user: any,
     @Param('workspaceId') workspaceId: string,
   ) {
+    await this.embeddingsService.assertWorkspaceAccess(workspaceId, user.id);
     return await this.embeddingsService.getWorkspaceStats(workspaceId);
   }
 
   @Delete('clear/:workspaceId')
   async clearWorkspaceEmbeddings(
+    @CurrentUser() user: any,
     @Param('workspaceId') workspaceId: string,
   ) {
+    await this.embeddingsService.assertWorkspaceAccess(workspaceId, user.id, true);
     const count = await this.embeddingsService.clearWorkspaceEmbeddings(workspaceId);
     return { cleared: count };
   }

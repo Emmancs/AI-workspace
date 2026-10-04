@@ -12,6 +12,7 @@ export class CreateTaskDto {
   priority?: TaskPriority;
   assigneeId?: string;
   dueDate?: Date;
+  labels?: Array<{ name: string; color?: string }>;
 }
 
 export class UpdateTaskDto {
@@ -21,6 +22,7 @@ export class UpdateTaskDto {
   priority?: TaskPriority;
   assigneeId?: string;
   dueDate?: Date;
+  labels?: Array<{ name: string; color?: string }>;
 }
 
 @Injectable()
@@ -73,6 +75,9 @@ export class TasksService {
 
   async create(dto: CreateTaskDto, userId: string) {
     await this.assertMember(dto.workspaceId, userId);
+    const project = await this.prisma.project.findFirst({ where: { id: dto.projectId, workspaceId: dto.workspaceId }, select: { id: true } });
+    if (!project) throw new NotFoundException('Project not found in workspace');
+    if (dto.assigneeId) await this.assertMember(dto.workspaceId, dto.assigneeId);
     const task = await this.prisma.task.create({
       data: {
         workspaceId: dto.workspaceId,
@@ -84,10 +89,12 @@ export class TasksService {
         assigneeId: dto.assigneeId,
         creatorId: userId,
         dueDate: dto.dueDate,
+        labels: dto.labels ? { create: dto.labels } : undefined,
       },
       include: {
         assignee: { select: { id: true, name: true, email: true, avatarUrl: true } },
         creator: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        labels: true,
       },
     });
     await this.prisma.activityLog.create({
@@ -115,6 +122,7 @@ export class TasksService {
     const existing = await this.prisma.task.findUnique({ where: { id: taskId } });
     if (!existing) throw new NotFoundException('Task not found');
     await this.assertMember(existing.workspaceId, userId);
+    if (dto.assigneeId) await this.assertMember(existing.workspaceId, dto.assigneeId);
     const updated = await this.prisma.task.update({
       where: { id: taskId },
       data: {
@@ -128,8 +136,15 @@ export class TasksService {
       include: {
         assignee: { select: { id: true, name: true, email: true, avatarUrl: true } },
         creator: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        labels: true,
       },
     });
+    if (dto.labels) {
+      await this.prisma.taskLabel.deleteMany({ where: { taskId } });
+      await this.prisma.taskLabel.createMany({
+        data: dto.labels.map((label) => ({ taskId, name: label.name, color: label.color || '#6366F1' })),
+      });
+    }
     await this.prisma.activityLog.create({
       data: {
         workspaceId: existing.workspaceId,

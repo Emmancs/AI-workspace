@@ -74,4 +74,16 @@ export class ProjectsController {
   async deleteProject(@Param('projectId') projectId: string, @CurrentUser('id') userId: string) {
     return this.projectsService.delete(projectId, userId);
   }
+
+  @Post(':projectId/members/:memberUserId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  async addMember(@Param('projectId') projectId: string, @Param('memberUserId') memberUserId: string, @CurrentUser('id') userId: string) {
+    return this.projectsService.addMember(projectId, memberUserId, userId);
+  }
+
+  @Delete(':projectId/members/:memberUserId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  async removeMember(@Param('projectId') projectId: string, @Param('memberUserId') memberUserId: string, @CurrentUser('id') userId: string) {
+    return this.projectsService.removeMember(projectId, memberUserId, userId);
+  }
 }

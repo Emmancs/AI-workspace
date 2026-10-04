@@ -16,13 +16,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
   ) {
+    const jwtSecret = configService.get<string>('JWT_SECRET');
+    if (!jwtSecret || jwtSecret.length < 32 || jwtSecret === 'dev_jwt_secret_key_change_in_production_32chars') {
+      throw new Error('JWT_SECRET must be configured with at least 32 characters');
+    }
+
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
         ExtractJwt.fromAuthHeaderAsBearerToken(),
         (req) => req?.cookies?.access_token,
       ]),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET') || 'dev_jwt_secret_key_change_in_production_32chars',
+      secretOrKey: jwtSecret,
     });
   }
 

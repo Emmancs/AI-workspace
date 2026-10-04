@@ -149,7 +149,13 @@ export class DocumentsService {
   }
 
   private queueEmbedding(documentId: string, workspaceId: string, title: string, plainText?: string | null) {
-    if (!this.embeddings || !plainText?.trim()) return;
+    if (!this.embeddings) return;
+    if (!plainText?.trim()) {
+      void this.embeddings.deleteEmbeddings(SourceType.DOCUMENT, documentId).catch((error) => {
+        console.error(`Embedding deletion failed for document ${documentId}`, error);
+      });
+      return;
+    }
     void this.embeddings.updateEmbeddings({
       sourceType: SourceType.DOCUMENT,
       sourceId: documentId,
@@ -170,10 +176,12 @@ export class DocumentsService {
     collaborationState?: string,
   ) {
     await this.assertDocumentAccess(documentId, userId, 'WRITE');
-    return this.prisma.document.update({
+    const updated = await this.prisma.document.update({
       where: { id: documentId },
       data: { content, plainText, ...(collaborationState ? { collaborationState } : {}) },
     });
+    this.queueEmbedding(updated.id, updated.workspaceId, updated.title, updated.plainText);
+    return updated;
   }
 
   async delete(documentId: string, userId: string) {
@@ -212,6 +220,9 @@ export class DocumentsService {
     });
 
     if (!version) {
+      throw new NotFoundException('Version not found');
+    }
+    if (version.documentId !== documentId) {
       throw new NotFoundException('Version not found');
     }
 

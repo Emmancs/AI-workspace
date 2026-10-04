@@ -128,7 +128,19 @@ export class AuthController {
   async googleAuthRedirect(@Req() req: Request, @Res() res: Response) {
     const tokens = await this.authService.validateGoogleUser(req.user as any);
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    res.redirect(`${frontendUrl}/dashboard?token=${tokens.accessToken}`);
+    res.cookie('access_token', tokens.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 3600 * 1000,
+    });
+    res.cookie('flowai_authenticated', '1', {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 3600 * 1000,
+    });
+    res.redirect(`${frontendUrl}/dashboard`);
   }
 
   @Get('me')

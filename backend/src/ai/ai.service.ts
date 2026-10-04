@@ -98,6 +98,9 @@ export class AiService {
           operation: 'summarizeDocument',
         },
       });
+      await this.prisma.activityLog.create({
+        data: { workspaceId, actorId: userId, action: 'ai_summarize', entityType: 'document', entityId: documentId },
+      });
 
       return { summary: text };
     } catch (error) {
@@ -129,6 +132,9 @@ export class AiService {
           operation: 'summarizeText',
         },
       });
+      await this.prisma.activityLog.create({
+        data: { workspaceId, actorId: userId, action: 'ai_summarize', entityType: 'text', entityId: userId },
+      });
 
       return { summary: summaryText };
     } catch (error) {
@@ -155,7 +161,7 @@ export class AiService {
       return '';
     }
 
-    const results = await this.embeddingsService.search(prompt, workspaceId, 5);
+    const results = await this.embeddingsService.search(prompt, workspaceId, userId, 5);
     return results
       .filter((result) => result.similarity >= 0.55)
       .map((result) => result.embedding.content)
@@ -196,6 +202,9 @@ export class AiService {
           model: this.modelName,
           operation,
         },
+      });
+      await this.prisma.activityLog.create({
+        data: { workspaceId, actorId: userId, action: `ai_${operation}`, entityType: 'ai_request', entityId: userId },
       });
 
       return { generated: text };
@@ -286,6 +295,9 @@ export class AiService {
           model: this.modelName,
           operation: 'chat',
         },
+      });
+      await this.prisma.activityLog.create({
+        data: { workspaceId, actorId: userId, action: 'ai_chat', entityType: 'ai_conversation', entityId: conversation.id },
       });
 
       return {

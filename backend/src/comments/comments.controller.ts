@@ -13,6 +13,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { DocumentsService } from '../documents/documents.service';
+import { ForbiddenException } from '@nestjs/common';
 
 export class CreateCommentDto {
   documentId: string;
@@ -34,13 +36,17 @@ export class CreateCommentReplyDto {
 @ApiTags('Comments')
 @Controller('comments')
 export class CommentsController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly documentsService: DocumentsService,
+  ) {}
 
   @Get('document/:documentId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all comments for a document' })
-  async getDocumentComments(@Param('documentId') documentId: string) {
+  async getDocumentComments(@Param('documentId') documentId: string, @CurrentUser('id') userId: string) {
+    await this.documentsService.findById(documentId, userId);
     return this.prisma.comment.findMany({
       where: { documentId },
       include: {
@@ -61,6 +67,10 @@ export class CommentsController {
     @Body() dto: CreateCommentDto,
     @CurrentUser('id') userId: string,
   ) {
+    const permission = await this.documentsService.checkPermission(dto.documentId, userId);
+    if (permission !== 'WRITE' && permission !== 'ADMIN') {
+      throw new ForbiddenException('You do not have permission to comment on this document');
+    }
     const document = await this.prisma.document.findUnique({
       where: { id: dto.documentId },
       select: { workspaceId: true, title: true },
@@ -121,6 +131,12 @@ export class CommentsController {
   ) {
     // Verify ownership
     const comment = await this.prisma.comment.findUnique({ where: { id: commentId } });
+    if (comment) {
+      const permission = await this.documentsService.checkPermission(comment.documentId, userId);
+      if (permission !== 'WRITE' && permission !== 'ADMIN') {
+        throw new ForbiddenException('You do not have permission to update this comment');
+      }
+    }
     if (comment?.userId !== userId) {
       throw new Error('Unauthorized');
     }
@@ -148,6 +164,12 @@ export class CommentsController {
   ) {
     // Verify ownership
     const comment = await this.prisma.comment.findUnique({ where: { id: commentId } });
+    if (comment) {
+      const permission = await this.documentsService.checkPermission(comment.documentId, userId);
+      if (permission !== 'WRITE' && permission !== 'ADMIN') {
+        throw new ForbiddenException('You do not have permission to delete this comment');
+      }
+    }
     if (comment?.userId !== userId) {
       throw new Error('Unauthorized');
     }
@@ -170,6 +192,10 @@ export class CommentsController {
       include: { document: { select: { workspaceId: true, title: true } } },
     });
     if (!comment) throw new Error('Comment not found');
+    const permission = await this.documentsService.checkPermission(comment.documentId, userId);
+    if (permission !== 'WRITE' && permission !== 'ADMIN') {
+      throw new ForbiddenException('You do not have permission to reply to this document comment');
+    }
 
     const reply = await this.prisma.commentReply.create({
       data: {

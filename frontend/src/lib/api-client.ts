@@ -29,7 +29,7 @@ export async function apiFetch<T = any>(
   const response = await fetch(`${API_URL}${endpoint}`, {
     ...options,
     headers,
-    credentials: 'omit',
+    credentials: 'include',
   });
 
   const data = await response.json().catch(() => ({}));

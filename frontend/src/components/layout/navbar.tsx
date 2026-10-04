@@ -5,6 +5,7 @@ import { Search, Bell, Plus, Menu } from 'lucide-react';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -16,12 +17,22 @@ interface NavbarProps {
 export function Navbar({ onToggleMobileDrawer, onOpenSearch }: NavbarProps) {
   const { activeWorkspace } = useAuth();
   const [unreadCount, setUnreadCount] = React.useState(0);
+  const [notifications, setNotifications] = React.useState<any[]>([]);
+  const [notificationsOpen, setNotificationsOpen] = React.useState(false);
+  const router = useRouter();
 
   React.useEffect(() => {
     if (!activeWorkspace?.id) return;
-    apiFetch<{ count: number }>('/notifications/unread-count')
-      .then((result) => setUnreadCount(result.count))
-      .catch(() => setUnreadCount(0));
+    const refresh = () => Promise.all([
+      apiFetch<{ count: number }>('/notifications/unread-count'),
+      apiFetch<{ items: any[] }>('/notifications'),
+    ]).then(([count, list]) => {
+      setUnreadCount(count.count);
+      setNotifications(list.items.slice(0, 8));
+    }).catch(() => undefined);
+    void refresh();
+    const interval = window.setInterval(refresh, 30_000);
+    return () => window.clearInterval(interval);
   }, [activeWorkspace?.id]);
 
   return (
@@ -59,10 +70,22 @@ export function Navbar({ onToggleMobileDrawer, onOpenSearch }: NavbarProps) {
         </div>
 
         {/* Notifications */}
-        <Link href="/notifications" aria-label="Notifications" className="relative p-2 rounded-lg bg-slate-900/60 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 transition-all">
+        <div className="relative">
+        <button onClick={() => setNotificationsOpen((open) => !open)} aria-label="Notifications" className="relative p-2 rounded-lg bg-slate-900/60 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 transition-all">
           <Bell className="w-4 h-4" />
           {unreadCount > 0 && <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-brand-500 text-[9px] text-white flex items-center justify-center">{unreadCount > 99 ? '99+' : unreadCount}</span>}
-        </Link>
+        </button>
+        {notificationsOpen && <div className="absolute right-0 top-11 z-50 w-80 rounded-xl border border-slate-700 bg-dark-900 p-2 shadow-2xl">
+          <div className="flex items-center justify-between px-2 py-1">
+            <span className="text-sm font-semibold text-white">Notifications</span>
+            <button className="text-xs text-brand-300" onClick={() => apiFetch('/notifications/read-all', { method: 'POST' }).then(() => { setUnreadCount(0); setNotifications((items) => items.map((item) => ({ ...item, isRead: true }))); })}>Mark all read</button>
+          </div>
+          {notifications.length === 0 ? <p className="p-3 text-xs text-slate-400">No notifications.</p> : notifications.map((item) => <button key={item.id} className={`block w-full rounded-lg p-2 text-left hover:bg-slate-800 ${item.isRead ? 'opacity-70' : ''}`} onClick={async () => { if (!item.isRead) { await apiFetch(`/notifications/${item.id}/read`, { method: 'PATCH' }); setUnreadCount((count) => Math.max(0, count - 1)); } setNotificationsOpen(false); if (item.link) router.push(item.link); }}>
+            <div className="text-xs font-medium text-white">{item.title}</div><div className="mt-1 text-xs text-slate-400">{item.content}</div>
+          </button>)}
+          <Link href="/notifications" onClick={() => setNotificationsOpen(false)} className="block p-2 text-center text-xs text-brand-300">View all notifications</Link>
+        </div>}
+        </div>
 
         {/* Action Button */}
         <Button variant="gradient" size="sm" className="hidden sm:flex">

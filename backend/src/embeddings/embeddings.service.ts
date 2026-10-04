@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
-import { SourceType, Embedding } from '@prisma/client';
+import { Prisma, SourceType, Embedding, WorkspaceRole, DocumentPermission } from '@prisma/client';
 import axios from 'axios';
 
 interface EmbeddingRequest {
@@ -32,6 +32,55 @@ export class EmbeddingsService {
     private config: ConfigService,
   ) {
     this.openaiApiKey = this.config.get<string>('OPENAI_API_KEY', '');
+  }
+
+  async assertWorkspaceAccess(workspaceId: string, userId: string, adminOnly = false) {
+    const member = await this.prisma.workspaceMember.findUnique({
+      where: { workspaceId_userId: { workspaceId, userId } },
+      select: { role: true },
+    });
+    if (!member || (adminOnly && member.role !== WorkspaceRole.OWNER && member.role !== WorkspaceRole.ADMIN)) {
+      throw new ForbiddenException('You do not have access to this workspace');
+    }
+    return member;
+  }
+
+  async getEmbeddingSource(sourceType: SourceType, sourceId: string) {
+    const embedding = await this.prisma.embedding.findFirst({
+      where: { sourceType, sourceId },
+      select: { workspaceId: true },
+    });
+    if (!embedding) throw new NotFoundException('Embedding source not found');
+    return embedding;
+  }
+
+  async assertSourceAccess(sourceType: SourceType, sourceId: string, workspaceId: string, userId: string, requireWrite = false) {
+    const member = await this.assertWorkspaceAccess(workspaceId, userId);
+    if (sourceType === SourceType.DOCUMENT) {
+      const document = await this.prisma.document.findFirst({
+        where: {
+          id: sourceId,
+          workspaceId,
+          OR: [
+            { createdById: userId },
+            { shares: { some: { userId, permissionLevel: requireWrite ? { in: [DocumentPermission.WRITE, DocumentPermission.ADMIN] } : { in: [DocumentPermission.READ, DocumentPermission.WRITE, DocumentPermission.ADMIN] } } } },
+          ],
+        },
+        select: { id: true },
+      });
+      if (!document) throw new ForbiddenException('You do not have access to this document');
+      return;
+    }
+    const sourceExists = sourceType === SourceType.PROJECT
+      ? await this.prisma.project.count({ where: { id: sourceId, workspaceId, OR: [{ ownerId: userId }, { members: { some: { userId } } }, ...(member.role === WorkspaceRole.OWNER || member.role === WorkspaceRole.ADMIN ? [{}] : [])] } })
+      : sourceType === SourceType.TASK
+        ? await this.prisma.task.count({ where: { id: sourceId, workspaceId, OR: [{ assigneeId: userId }, { project: { ownerId: userId } }, { project: { members: { some: { userId } } } }, ...(member.role === WorkspaceRole.OWNER || member.role === WorkspaceRole.ADMIN ? [{}] : [])] } })
+        : sourceType === SourceType.COMMENT
+          ? await this.prisma.comment.count({ where: { id: sourceId, document: { workspaceId, OR: [{ createdById: userId }, { shares: { some: { userId } } }] } } })
+          : sourceType === SourceType.DISCUSSION
+            ? await this.prisma.discussionChannel.count({ where: { id: sourceId, workspaceId } })
+            : 0;
+    if (!sourceExists) throw new ForbiddenException('You do not have access to this source');
   }
 
   /**
@@ -202,6 +251,7 @@ export class EmbeddingsService {
   async search(
     query: string,
     workspaceId: string,
+    userId: string,
     limit: number = 10,
     sourceTypeFilter?: SourceType,
   ): Promise<SearchResult[]> {
@@ -212,6 +262,18 @@ export class EmbeddingsService {
 
       // Execute raw SQL query for vector similarity search
       // Note: pgvector's <=> operator is for cosine distance
+      const accessibleDocuments = await this.prisma.document.findMany({
+        where: {
+          workspaceId,
+          OR: [{ createdById: userId }, { shares: { some: { userId } } }],
+        },
+        select: { id: true },
+      });
+      const documentIds = accessibleDocuments.map((document) => document.id);
+      const sourceFilter = sourceTypeFilter ? Prisma.sql`AND "sourceType" = ${sourceTypeFilter}` : Prisma.empty;
+      const documentFilter = documentIds.length
+        ? Prisma.sql`OR ("sourceType" = 'DOCUMENT' AND "sourceId" IN (${Prisma.join(documentIds)}))`
+        : Prisma.sql`OR FALSE`;
       const results = await this.prisma.$queryRaw<
         Array<{
           id: string;
@@ -239,7 +301,8 @@ export class EmbeddingsService {
           (1 - (vector <=> ${queryVector as any})) as similarity
         FROM "Embedding"
         WHERE "workspaceId" = ${workspaceId}
-          ${sourceTypeFilter ? `AND "sourceType" = ${sourceTypeFilter}` : ''}
+          ${sourceFilter}
+          AND ("sourceType" <> 'DOCUMENT' ${documentFilter})
         ORDER BY vector <=> ${queryVector as any}
         LIMIT ${limit}
       `;

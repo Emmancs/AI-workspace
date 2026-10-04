@@ -241,6 +241,16 @@ export class WorkspacesService {
         invitedBy: { select: { id: true, name: true, email: true } },
       },
     });
+    await this.prisma.activityLog.create({
+      data: {
+        workspaceId,
+        actorId: invitedById,
+        action: 'invited',
+        entityType: 'workspace_invitation',
+        entityId: invitation.id,
+        metadata: { email: invitation.email, role: invitation.role },
+      },
+    });
     const workspace = invitation.workspace;
     const invitedUser = await this.prisma.user.findUnique({ where: { email: invitation.email }, select: { id: true } });
     if (invitedUser) {

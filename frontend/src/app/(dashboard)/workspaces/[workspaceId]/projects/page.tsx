@@ -12,11 +12,17 @@ export default function ProjectsPage({ params }: { params: { workspaceId: string
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [members, setMembers] = React.useState<any[]>([]);
 
   const loadProjects = React.useCallback(async () => {
     try {
       setError(null);
-      setProjects(await apiFetch(`/projects/workspace/${params.workspaceId}`));
+      const [projectData, memberData] = await Promise.all([
+        apiFetch(`/projects/workspace/${params.workspaceId}`),
+        apiFetch(`/workspaces/${params.workspaceId}/members`),
+      ]);
+      setProjects(projectData);
+      setMembers(memberData);
     } catch (err: any) {
       setError(err.message || 'Failed to load projects');
     } finally {
@@ -46,16 +52,28 @@ export default function ProjectsPage({ params }: { params: { workspaceId: string
       setSaving(false);
     }
 
-    async function updateProject(id: string, data: Record<string, string>) {
-      try { await apiFetch(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) }); await loadProjects(); }
-      catch (err: any) { setError(err.message || 'Failed to update project'); }
-    }
+  }
 
-    async function deleteProject(id: string) {
-      if (!window.confirm('Delete this project and its tasks?')) return;
-      try { await apiFetch(`/projects/${id}`, { method: 'DELETE' }); await loadProjects(); }
-      catch (err: any) { setError(err.message || 'Failed to delete project'); }
-    }
+  async function updateProject(id: string, data: Record<string, string>) {
+    try { await apiFetch(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) }); await loadProjects(); }
+    catch (err: any) { setError(err.message || 'Failed to update project'); }
+  }
+
+  async function deleteProject(id: string) {
+    if (!window.confirm('Delete this project and its tasks?')) return;
+    try { await apiFetch(`/projects/${id}`, { method: 'DELETE' }); await loadProjects(); }
+    catch (err: any) { setError(err.message || 'Failed to delete project'); }
+  }
+
+  async function addProjectMember(projectId: string, userId: string) {
+    if (!userId) return;
+    try { await apiFetch(`/projects/${projectId}/members/${userId}`, { method: 'POST' }); await loadProjects(); }
+    catch (err: any) { setError(err.message || 'Failed to add project member'); }
+  }
+
+  async function removeProjectMember(projectId: string, userId: string) {
+    try { await apiFetch(`/projects/${projectId}/members/${userId}`, { method: 'DELETE' }); await loadProjects(); }
+    catch (err: any) { setError(err.message || 'Failed to remove project member'); }
   }
 
   return (
@@ -89,6 +107,12 @@ export default function ProjectsPage({ params }: { params: { workspaceId: string
                 </select>
                 <span className="text-xs text-slate-500">{project._count?.tasks || 0} tasks</span>
                 <Button size="sm" variant="ghost" onClick={() => deleteProject(project.id)}>Delete</Button>
+              </div>
+              <div className="mt-3 border-t border-slate-800 pt-3">
+                <select defaultValue="" onChange={(event) => { void addProjectMember(project.id, event.target.value); event.target.value = ''; }} className="input w-full text-xs">
+                  <option value="">Add project member</option>{members.filter((member) => !project.members?.some((item: any) => item.userId === member.user.id)).map((member) => <option key={member.user.id} value={member.user.id}>{member.user.name}</option>)}
+                </select>
+                <div className="mt-2 flex flex-wrap gap-1">{project.members?.map((member: any) => <button key={member.userId} onClick={() => removeProjectMember(project.id, member.userId)} className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-300 hover:text-white">{member.user.name} ×</button>)}</div>
               </div>
             </Card>
           ))}
