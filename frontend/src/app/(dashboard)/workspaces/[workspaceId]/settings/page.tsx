@@ -25,17 +25,44 @@ interface SettingsPageProps {
 
 export default function SettingsPage({ params }: SettingsPageProps) {
   const router = useRouter();
-  const [name, setName] = React.useState('FlowAI Team Workspace');
-  const [description, setDescription] = React.useState('Collaborative AI workspace for engineering & product teams');
-  const [logoUrl, setLogoUrl] = React.useState('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe');
+  const [name, setName] = React.useState('');
+  const [description, setDescription] = React.useState('');
+  const [logoUrl, setLogoUrl] = React.useState('');
   
   // AI Settings
   const [autoSummarize, setAutoSummarize] = React.useState(true);
   const [ragContextIsolation, setRagContextIsolation] = React.useState(true);
-  const [aiModel, setAiModel] = React.useState('gpt-4o-mini');
+  const [aiModel, setAiModel] = React.useState('gemini-1.5-flash');
 
   const [saving, setSaving] = React.useState(false);
   const [success, setSuccess] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    apiFetch(`/workspaces/${params.workspaceId}`)
+      .then((workspace) => {
+        if (cancelled) return;
+        const aiSettings = workspace.settings?.aiSettings || {};
+        setName(workspace.name || '');
+        setDescription(workspace.description || '');
+        setLogoUrl(workspace.logoUrl || '');
+        setAutoSummarize(aiSettings.autoSummarize ?? true);
+        setRagContextIsolation(aiSettings.ragContextIsolation ?? true);
+        setAiModel(aiSettings.aiModel || 'gemini-1.5-flash');
+      })
+      .catch((err: any) => {
+        if (!cancelled) alert(err.message || 'Failed to load workspace settings');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [params.workspaceId]);
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,7 +116,7 @@ export default function SettingsPage({ params }: SettingsPageProps) {
           </p>
         </div>
 
-        <Button variant="gradient" size="sm" onClick={handleSaveSettings} disabled={saving}>
+        <Button variant="gradient" size="sm" onClick={handleSaveSettings} disabled={saving || loading}>
           <Save className="w-4 h-4" />
           <span>{saving ? 'Saving...' : 'Save Settings'}</span>
         </Button>
@@ -189,7 +216,7 @@ export default function SettingsPage({ params }: SettingsPageProps) {
               onChange={(e) => setAiModel(e.target.value)}
               className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-brand-500"
             >
-              <option value="gpt-4o-mini">OpenAI GPT-4o Mini (Fast & Cost Efficient)</option>
+              <option value="gemini-1.5-flash">Google Gemini 1.5 Flash</option>
               <option value="gpt-4o">OpenAI GPT-4o (High Reasoning)</option>
               <option value="claude-3-5-sonnet">Anthropic Claude 3.5 Sonnet</option>
             </select>

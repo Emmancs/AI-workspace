@@ -30,43 +30,52 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { apiFetch } from '@/lib/api-client';
 
-const taskData = [
-  { day: 'Mon', completed: 12, created: 18 },
-  { day: 'Tue', completed: 19, created: 22 },
-  { day: 'Wed', completed: 25, created: 15 },
-  { day: 'Thu', completed: 32, created: 28 },
-  { day: 'Fri', completed: 41, created: 30 },
-  { day: 'Sat', completed: 18, created: 8 },
-  { day: 'Sun', completed: 14, created: 5 },
-];
-
-const aiUsageData = [
-  { hour: '09:00', requests: 120 },
-  { hour: '11:00', requests: 340 },
-  { hour: '13:00', requests: 280 },
-  { hour: '15:00', requests: 490 },
-  { hour: '17:00', requests: 310 },
-];
+type DashboardStats = {
+  projects: number;
+  tasks: number;
+  documents: number;
+  aiRequests: number;
+  recentDocs: any[];
+  tasksByStatus: Array<{ day: string; completed: number }>;
+  aiByOperation: Array<{ hour: string; requests: number }>;
+};
 
 export default function DashboardPage() {
   const { user, activeWorkspace } = useAuth();
-  const [stats, setStats] = React.useState({ projects: 0, tasks: 0, documents: 0, aiRequests: 0, recentDocs: [] });
+  const [stats, setStats] = React.useState<DashboardStats>({
+    projects: 0,
+    tasks: 0,
+    documents: 0,
+    aiRequests: 0,
+    recentDocs: [],
+    tasksByStatus: [],
+    aiByOperation: [],
+  });
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
     async function loadStats() {
       if (!activeWorkspace) return;
       try {
-        const [wsData, docs] = await Promise.all([
+        const [wsData, docs, analytics] = await Promise.all([
           apiFetch(`/workspaces/${activeWorkspace.id}`),
-          apiFetch(`/documents/workspace/${activeWorkspace.id}`)
+          apiFetch(`/documents/workspace/${activeWorkspace.id}`),
+          apiFetch(`/analytics/workspace/${activeWorkspace.id}`),
         ]);
         setStats({
-          projects: wsData._count?.projects || 0,
-          tasks: wsData._count?.tasks || 0,
-          documents: wsData._count?.documents || 0,
-          aiRequests: wsData._count?.aiUsageLogs || 0,
+          projects: analytics.counts?.projects ?? wsData._count?.projects ?? 0,
+          tasks: analytics.counts?.tasks ?? wsData._count?.tasks ?? 0,
+          documents: analytics.counts?.documents ?? wsData._count?.documents ?? 0,
+          aiRequests: analytics.counts?.aiRequests ?? 0,
           recentDocs: Array.isArray(docs) ? docs.slice(0, 5) : [],
+          tasksByStatus: (analytics.tasksByStatus || []).map((item: any) => ({
+            day: item.status,
+            completed: item.count,
+          })),
+          aiByOperation: (analytics.aiByOperation || []).map((item: any) => ({
+            hour: item.operation,
+            requests: item.count,
+          })),
         });
       } catch (e) {
         console.error('Failed to load stats', e);
@@ -169,7 +178,7 @@ export default function DashboardPage() {
           <CardContent>
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={taskData}>
+                <AreaChart data={stats.tasksByStatus}>
                   <defs>
                     <linearGradient id="colorCompleted" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#6366F1" stopOpacity={0.4}/>
@@ -200,7 +209,7 @@ export default function DashboardPage() {
           <CardContent>
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={aiUsageData}>
+                <BarChart data={stats.aiByOperation}>
                   <XAxis dataKey="hour" stroke="#64748B" fontSize={10} tickLine={false} />
                   <YAxis stroke="#64748B" fontSize={10} tickLine={false} />
                   <Tooltip 

@@ -13,7 +13,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, loading: authLoading } = useAuth();
+  const { user, activeWorkspace, loading: authLoading } = useAuth();
   const router = useRouter();
 
   React.useEffect(() => {
@@ -93,7 +93,7 @@ export default function DashboardLayout({
     <div className="min-h-screen bg-dark-950 flex flex-row">
       {/* Sidebar */}
       <Sidebar 
-        workspaceId="ws-1" 
+        workspaceId={activeWorkspace?.id}
         onOpenAiDrawer={() => setAiDrawerOpen(true)} 
       />
 

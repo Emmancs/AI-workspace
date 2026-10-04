@@ -19,7 +19,6 @@ import {
   LogOut
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/lib/auth-context';
 
 interface SidebarProps {
@@ -27,23 +26,24 @@ interface SidebarProps {
   onOpenAiDrawer?: () => void;
 }
 
-export function Sidebar({ workspaceId = 'ws-1', onOpenAiDrawer }: SidebarProps) {
+export function Sidebar({ workspaceId, onOpenAiDrawer }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, activeWorkspace, logout } = useAuth();
+  const currentWorkspaceId = activeWorkspace?.id || workspaceId;
   const [workspaceOpen, setWorkspaceOpen] = React.useState(true);
 
   const mainNav = [
     { name: 'Dashboard', href: `/dashboard`, icon: LayoutDashboard },
-    { name: 'Projects', href: `/workspaces/${activeWorkspace?.id || workspaceId}/projects`, icon: FolderKanban, badge: '8' },
-    { name: 'Documents', href: `/workspaces/${activeWorkspace?.id || workspaceId}/documents`, icon: FileText, badge: '14' },
-    { name: 'Tasks', href: `/workspaces/${activeWorkspace?.id || workspaceId}/tasks`, icon: CheckSquare, badge: '23' },
-    { name: 'Discussions', href: `/workspaces/${activeWorkspace?.id || workspaceId}/discussions`, icon: MessageSquare, badge: 'Live' },
+    { name: 'Projects', href: currentWorkspaceId ? `/workspaces/${currentWorkspaceId}/projects` : '/dashboard', icon: FolderKanban },
+    { name: 'Documents', href: currentWorkspaceId ? `/workspaces/${currentWorkspaceId}/documents` : '/dashboard', icon: FileText },
+    { name: 'Tasks', href: currentWorkspaceId ? `/workspaces/${currentWorkspaceId}/tasks` : '/dashboard', icon: CheckSquare },
+    { name: 'Discussions', href: currentWorkspaceId ? `/workspaces/${currentWorkspaceId}/discussions` : '/dashboard', icon: MessageSquare },
   ];
 
   const adminNav = [
-    { name: 'Members & Roles', href: `/workspaces/${activeWorkspace?.id || workspaceId}/members`, icon: Users },
-    { name: 'Workspace Settings', href: `/workspaces/${activeWorkspace?.id || workspaceId}/settings`, icon: Settings },
+    { name: 'Members & Roles', href: currentWorkspaceId ? `/workspaces/${currentWorkspaceId}/members` : '/dashboard', icon: Users },
+    { name: 'Workspace Settings', href: currentWorkspaceId ? `/workspaces/${currentWorkspaceId}/settings` : '/dashboard', icon: Settings },
     { name: 'System Admin', href: `/admin`, icon: ShieldAlert },
   ];
 
@@ -85,7 +85,7 @@ export function Sidebar({ workspaceId = 'ws-1', onOpenAiDrawer }: SidebarProps) 
                 <span className="text-xs font-semibold text-white truncate max-w-[110px]">
                   {activeWorkspace?.name || 'FlowAI Team'}
                 </span>
-                <span className="text-[10px] text-slate-400">12 Members • Owner</span>
+                <span className="text-[10px] text-slate-400">Active workspace</span>
               </div>
             </div>
             <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", workspaceOpen && "rotate-180")} />
@@ -128,11 +128,6 @@ export function Sidebar({ workspaceId = 'ws-1', onOpenAiDrawer }: SidebarProps) 
                     <Icon className={cn("w-4 h-4", isActive ? "text-brand-400" : "text-slate-400 group-hover:text-slate-200")} />
                     <span>{item.name}</span>
                   </div>
-                  {item.badge && (
-                    <Badge variant={isActive ? "brand" : "default"}>
-                      {item.badge}
-                    </Badge>
-                  )}
                 </Link>
               );
             })}
@@ -173,7 +168,7 @@ export function Sidebar({ workspaceId = 'ws-1', onOpenAiDrawer }: SidebarProps) 
           </div>
           <div className="flex flex-col min-w-0">
             <span className="text-xs font-medium text-white truncate">{user?.name || 'Emmanuel'}</span>
-            <span className="text-[10px] text-slate-400 truncate">{user?.email || 'emmanuel@flowai.io'}</span>
+            <span className="text-[10px] text-slate-400 truncate">{user?.email || ''}</span>
           </div>
         </div>
 

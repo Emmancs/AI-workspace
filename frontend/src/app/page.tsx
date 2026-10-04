@@ -79,7 +79,7 @@ export default function LandingPage() {
                 <ArrowRight className="w-5 h-5" />
               </Button>
             </Link>
-            <Link href="/workspaces/ws-1">
+            <Link href="/dashboard">
               <Button variant="outline" size="lg">
                 <span>Explore workspace</span>
                 <ChevronRight className="w-5 h-5 text-slate-400" />

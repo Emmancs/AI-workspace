@@ -11,7 +11,7 @@ import { useAuth } from '@/lib/auth-context';
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
-  const [email, setEmail] = React.useState('emmanuel@flowai.io');
+  const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('StrongP@ssw0rd123');
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);

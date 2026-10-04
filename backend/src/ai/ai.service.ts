@@ -1,4 +1,11 @@
-import { Injectable, Logger, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  HttpException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { PrismaService } from '../prisma/prisma.service';
@@ -26,12 +33,26 @@ export class AiService {
     return this.genAI.getGenerativeModel({ model: this.modelName });
   }
 
+  private async assertWorkspaceAccess(workspaceId: string, userId: string) {
+    const membership = await this.prisma.workspaceMember.findUnique({
+      where: { workspaceId_userId: { workspaceId, userId } },
+      select: { id: true },
+    });
+
+    if (!membership) {
+      throw new ForbiddenException('You do not have access to this workspace');
+    }
+  }
+
   async summarizeDocument(documentId: string, userId: string, workspaceId: string) {
     // We get the document using the existing service which performs RBAC checks
     const document = await this.documentsService.findById(documentId, userId);
     
     if (!document) {
       throw new NotFoundException('Document not found or access denied');
+    }
+    if (document.workspaceId !== workspaceId) {
+      throw new ForbiddenException('Document does not belong to this workspace');
     }
 
     const contentToSummarize = document.plainText || JSON.stringify(document.content);
@@ -64,6 +85,7 @@ export class AiService {
   }
 
   async summarizeText(text: string, userId: string, workspaceId: string) {
+    await this.assertWorkspaceAccess(workspaceId, userId);
     if (!text || text.trim() === '') {
       return { summary: '' };
     }
@@ -93,6 +115,7 @@ export class AiService {
   }
 
   async generateContent(prompt: string, userId: string, workspaceId: string) {
+    await this.assertWorkspaceAccess(workspaceId, userId);
     try {
       const model = this.getModel();
       const result = await model.generateContent(prompt);
@@ -118,6 +141,7 @@ export class AiService {
 
   async chat(message: string, userId: string, workspaceId: string, conversationId?: string) {
     try {
+      await this.assertWorkspaceAccess(workspaceId, userId);
       let conversation;
       
       if (conversationId) {
@@ -126,7 +150,10 @@ export class AiService {
           include: { messages: { orderBy: { createdAt: 'asc' } } }
         });
         
-        if (conversation && conversation.userId !== userId) {
+        if (
+          conversation &&
+          (conversation.userId !== userId || conversation.workspaceId !== workspaceId)
+        ) {
           throw new NotFoundException('Conversation not found');
         }
       }
@@ -191,11 +218,15 @@ export class AiService {
       };
     } catch (error) {
       this.logger.error('Error in chat', error);
+      if (error instanceof HttpException) {
+        throw error;
+      }
       throw new InternalServerErrorException('Failed to process chat message');
     }
   }
 
   async getConversations(userId: string, workspaceId: string) {
+    await this.assertWorkspaceAccess(workspaceId, userId);
     return this.prisma.aIConversation.findMany({
       where: { userId, workspaceId },
       orderBy: { updatedAt: 'desc' },
@@ -208,13 +239,18 @@ export class AiService {
     });
   }
 
-  async getConversation(conversationId: string, userId: string) {
+  async getConversation(conversationId: string, userId: string, workspaceId: string) {
+    await this.assertWorkspaceAccess(workspaceId, userId);
     const conversation = await this.prisma.aIConversation.findUnique({
       where: { id: conversationId },
       include: { messages: { orderBy: { createdAt: 'asc' } } },
     });
 
-    if (!conversation || conversation.userId !== userId) {
+    if (
+      !conversation ||
+      conversation.userId !== userId ||
+      conversation.workspaceId !== workspaceId
+    ) {
       throw new NotFoundException('Conversation not found');
     }
 

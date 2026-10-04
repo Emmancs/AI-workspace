@@ -53,33 +53,7 @@ export default function MembersPage({ params }: MembersPageProps) {
       const data = await apiFetch(`/workspaces/${params.workspaceId}/members`);
       setMembers(data);
     } catch (err: any) {
-      // Mock fallback data if running standalone
-      setMembers([
-        {
-          id: 'mem-1',
-          role: 'OWNER',
-          joinedAt: new Date().toISOString(),
-          user: { id: 'usr-1', name: 'Emmanuel', email: 'emmanuel@flowai.io', jobTitle: 'Founding Engineer' }
-        },
-        {
-          id: 'mem-2',
-          role: 'ADMIN',
-          joinedAt: new Date().toISOString(),
-          user: { id: 'usr-2', name: 'Alex Johnson', email: 'alex@flowai.io', jobTitle: 'Tech Lead' }
-        },
-        {
-          id: 'mem-3',
-          role: 'EDITOR',
-          joinedAt: new Date().toISOString(),
-          user: { id: 'usr-3', name: 'Priya Sharma', email: 'priya@flowai.io', jobTitle: 'Fullstack Dev' }
-        },
-        {
-          id: 'mem-4',
-          role: 'VIEWER',
-          joinedAt: new Date().toISOString(),
-          user: { id: 'usr-4', name: 'John Doe', email: 'john@example.com', jobTitle: 'Product Manager' }
-        }
-      ]);
+      setError(err.message || 'Failed to load workspace members');
     } finally {
       setLoading(false);
     }
@@ -120,12 +94,12 @@ export default function MembersPage({ params }: MembersPageProps) {
     setError(null);
 
     try {
-      const result = await apiFetch(`/workspaces/${params.workspaceId}/invitations`, {
+      await apiFetch(`/workspaces/${params.workspaceId}/invitations`, {
         method: 'POST',
         body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
       });
 
-      setInviteSuccess(`Invitation sent to ${inviteEmail}! Token: ${result.token.substring(0, 8)}...`);
+      setInviteSuccess(`Invitation sent to ${inviteEmail}!`);
       setInviteEmail('');
       setTimeout(() => setInviteModalOpen(false), 2000);
     } catch (err: any) {

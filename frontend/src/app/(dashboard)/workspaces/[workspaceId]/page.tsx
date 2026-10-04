@@ -34,7 +34,7 @@ export default function WorkspaceDetailPage({ params }: WorkspacePageProps) {
       try {
         const [wsData, projData] = await Promise.all([
           apiFetch(`/workspaces/${params.workspaceId}`),
-          apiFetch(`/projects?workspaceId=${params.workspaceId}`).catch(() => []) // Fetch projects if API exists
+          apiFetch(`/projects/workspace/${params.workspaceId}`)
         ]);
         setWorkspace(wsData);
         setProjects(Array.isArray(projData) ? projData : []);

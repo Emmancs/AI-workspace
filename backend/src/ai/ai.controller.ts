@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Get, Param, Headers } from '@nestjs/common';
+import { BadRequestException, Controller, Post, Body, UseGuards, Get, Param, Headers } from '@nestjs/common';
 import { AiService } from './ai.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -19,14 +19,15 @@ export class AiController {
     @CurrentUser('id') userId: string,
     @Headers('x-workspace-id') workspaceId: string,
   ) {
-    // Usually workspaceId comes from the context, let's allow fallback if needed.
-    const effectiveWorkspaceId = workspaceId || 'default-workspace';
-    if (dto.documentId) {
-      return this.aiService.summarizeDocument(dto.documentId, userId, effectiveWorkspaceId);
-    } else if (dto.text) {
-      return this.aiService.summarizeText(dto.text, userId, effectiveWorkspaceId);
+    if (!workspaceId) {
+      throw new BadRequestException('x-workspace-id header is required');
     }
-    return { summary: '' };
+    if (dto.documentId) {
+      return this.aiService.summarizeDocument(dto.documentId, userId, workspaceId);
+    } else if (dto.text) {
+      return this.aiService.summarizeText(dto.text, userId, workspaceId);
+    }
+    throw new BadRequestException('documentId or text is required');
   }
 
   @Post('generate')
@@ -36,7 +37,10 @@ export class AiController {
     @CurrentUser('id') userId: string,
     @Headers('x-workspace-id') workspaceId: string,
   ) {
-    return this.aiService.generateContent(dto.prompt, userId, workspaceId || 'default-workspace');
+    if (!workspaceId) {
+      throw new BadRequestException('x-workspace-id header is required');
+    }
+    return this.aiService.generateContent(dto.prompt, userId, workspaceId);
   }
 
   @Post('chat')
@@ -46,7 +50,10 @@ export class AiController {
     @CurrentUser('id') userId: string,
     @Headers('x-workspace-id') workspaceId: string,
   ) {
-    return this.aiService.chat(dto.message, userId, workspaceId || 'default-workspace', dto.conversationId);
+    if (!workspaceId) {
+      throw new BadRequestException('x-workspace-id header is required');
+    }
+    return this.aiService.chat(dto.message, userId, workspaceId, dto.conversationId);
   }
 
   @Get('conversations')
@@ -55,7 +62,10 @@ export class AiController {
     @CurrentUser('id') userId: string,
     @Headers('x-workspace-id') workspaceId: string,
   ) {
-    return this.aiService.getConversations(userId, workspaceId || 'default-workspace');
+    if (!workspaceId) {
+      throw new BadRequestException('x-workspace-id header is required');
+    }
+    return this.aiService.getConversations(userId, workspaceId);
   }
 
   @Get('conversations/:id')
@@ -63,7 +73,11 @@ export class AiController {
   async getConversation(
     @Param('id') conversationId: string,
     @CurrentUser('id') userId: string,
+    @Headers('x-workspace-id') workspaceId: string,
   ) {
-    return this.aiService.getConversation(conversationId, userId);
+    if (!workspaceId) {
+      throw new BadRequestException('x-workspace-id header is required');
+    }
+    return this.aiService.getConversation(conversationId, userId, workspaceId);
   }
 }

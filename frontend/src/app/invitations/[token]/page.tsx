@@ -43,7 +43,7 @@ export default function InvitationPage({ params }: InvitationPageProps) {
         method: 'POST',
       });
       setActionDone('Invitation accepted! Redirecting to workspace...');
-      setTimeout(() => router.push(`/workspaces/${invitation.workspaceId || 'ws-1'}`), 1500);
+      setTimeout(() => router.push(`/workspaces/${invitation.workspaceId}`), 1500);
     } catch (err: any) {
       setError(err.message || 'Failed to accept invitation. Please ensure you are logged in.');
     } finally {

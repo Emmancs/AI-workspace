@@ -28,19 +28,20 @@ export class ProjectsController {
   @ApiOperation({ summary: 'List all projects in a workspace' })
   async getProjectsByWorkspace(
     @Param('workspaceId') workspaceId: string,
+    @CurrentUser('id') userId: string,
     @Query('status') status?: string,
     @Query('priority') priority?: string,
     @Query('search') search?: string,
   ) {
-    return this.projectsService.findByWorkspace(workspaceId, { status, priority, search });
+    return this.projectsService.findByWorkspace(workspaceId, userId, { status, priority, search });
   }
 
   @Get(':projectId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get project details by ID' })
-  async getProject(@Param('projectId') projectId: string) {
-    return this.projectsService.findById(projectId);
+  async getProject(@Param('projectId') projectId: string, @CurrentUser('id') userId: string) {
+    return this.projectsService.findById(projectId, userId);
   }
 
   @Post()
@@ -61,15 +62,16 @@ export class ProjectsController {
   async updateProject(
     @Param('projectId') projectId: string,
     @Body() dto: UpdateProjectDto,
+    @CurrentUser('id') userId: string,
   ) {
-    return this.projectsService.update(projectId, dto);
+    return this.projectsService.update(projectId, dto, userId);
   }
 
   @Delete(':projectId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete project' })
-  async deleteProject(@Param('projectId') projectId: string) {
-    return this.projectsService.delete(projectId);
+  async deleteProject(@Param('projectId') projectId: string, @CurrentUser('id') userId: string) {
+    return this.projectsService.delete(projectId, userId);
   }
 }

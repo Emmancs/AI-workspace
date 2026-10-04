@@ -26,10 +26,11 @@ export class TasksController {
   @ApiOperation({ summary: 'List tasks in a project' })
   async getTasksByProject(
     @Param('projectId') projectId: string,
+    @CurrentUser('id') userId: string,
     @Query('status') status?: string,
     @Query('priority') priority?: string,
   ) {
-    return this.tasksService.findByProject(projectId, { status, priority });
+    return this.tasksService.findByProject(projectId, userId, { status, priority });
   }
 
   @Get('workspace/:workspaceId')
@@ -38,18 +39,19 @@ export class TasksController {
   @ApiOperation({ summary: 'List all tasks in a workspace' })
   async getTasksByWorkspace(
     @Param('workspaceId') workspaceId: string,
+    @CurrentUser('id') userId: string,
     @Query('status') status?: string,
     @Query('priority') priority?: string,
   ) {
-    return this.tasksService.findByWorkspace(workspaceId, { status, priority });
+    return this.tasksService.findByWorkspace(workspaceId, userId, { status, priority });
   }
 
   @Get(':taskId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get task details' })
-  async getTask(@Param('taskId') taskId: string) {
-    return this.tasksService.findById(taskId);
+  async getTask(@Param('taskId') taskId: string, @CurrentUser('id') userId: string) {
+    return this.tasksService.findById(taskId, userId);
   }
 
   @Post()
@@ -70,15 +72,16 @@ export class TasksController {
   async updateTask(
     @Param('taskId') taskId: string,
     @Body() dto: UpdateTaskDto,
+    @CurrentUser('id') userId: string,
   ) {
-    return this.tasksService.update(taskId, dto);
+    return this.tasksService.update(taskId, dto, userId);
   }
 
   @Delete(':taskId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete task' })
-  async deleteTask(@Param('taskId') taskId: string) {
-    return this.tasksService.delete(taskId);
+  async deleteTask(@Param('taskId') taskId: string, @CurrentUser('id') userId: string) {
+    return this.tasksService.delete(taskId, userId);
   }
 }
