@@ -19,9 +19,17 @@ import { EmailModule } from '../email/email.module';
       useFactory: async (configService: ConfigService) => ({
         secret: (() => {
           const secret = configService.get<string>('JWT_SECRET');
-          if (!secret || secret.length < 32 || secret === 'dev_jwt_secret_key_change_in_production_32chars') {
-            throw new Error('JWT_SECRET must be configured with at least 32 characters');
+
+          if (
+            !secret ||
+            secret.length < 32 ||
+            secret === 'dev_jwt_secret_key_change_in_production_32chars'
+          ) {
+            throw new Error(
+              'JWT_SECRET must be configured with at least 32 characters',
+            );
           }
+
           return secret;
         })(),
         signOptions: { expiresIn: '1h' },
@@ -30,7 +38,12 @@ import { EmailModule } from '../email/email.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, GoogleStrategy, RolesGuard, JwtAuthGuard],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    RolesGuard,
+    JwtAuthGuard,
+  ],
   exports: [AuthService, JwtAuthGuard, RolesGuard, JwtModule],
 })
 export class AuthModule {}
