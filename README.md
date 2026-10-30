@@ -64,4 +64,4 @@ flowai-workspace/
 │   │   └── lib/              # Utilities & helpers
 ├── docker-compose.yml        # PostgreSQL (pgvector) + Redis + Services
 └── README.md
-```
+
